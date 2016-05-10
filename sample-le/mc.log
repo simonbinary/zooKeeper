@@ -1,0 +1,30 @@
+2016-05-09 22:10:03,170 [myid:] - INFO  [main:TestRunner@?] - State exploration strategy is edu.uchicago.cs.ucare.samc.election.LeaderElectionSemanticAwareModelChecker
+2016-05-09 22:10:03,226 [myid:] - DEBUG [main:ModelCheckingServerAbstract@?] - Test reset
+2016-05-09 22:10:03,731 [myid:] - INFO  [main:ModelCheckingServerAbstract@?] - This test has id = 1
+2016-05-09 22:10:03,799 [myid:] - DEBUG [main:LeaderElectionEnsembleController@?] - Starting ensemble
+2016-05-09 22:10:03,799 [myid:] - DEBUG [main:LeaderElectionEnsembleController@?] - Starting node 0
+2016-05-09 22:10:04,003 [myid:] - DEBUG [main:LeaderElectionEnsembleController@?] - Starting node 1
+2016-05-09 22:10:04,210 [myid:] - DEBUG [main:LeaderElectionEnsembleController@?] - Starting node 2
+2016-05-09 22:10:04,416 [myid:] - INFO  [main:ModelCheckingServerAbstract@?] - Starts wait on first steady states
+2016-05-09 22:10:09,420 [myid:] - DEBUG [main:ModelCheckingServerAbstract@?] - Node 0 is in steady state
+2016-05-09 22:10:09,421 [myid:] - DEBUG [main:ModelCheckingServerAbstract@?] - Node 1 is in steady state
+2016-05-09 22:10:09,421 [myid:] - DEBUG [main:ModelCheckingServerAbstract@?] - Node 2 is in steady state
+2016-05-09 22:10:09,421 [myid:] - DEBUG [main:ModelCheckingServerAbstract@?] - System update its global state to be 29791
+2016-05-09 22:10:09,422 [myid:] - INFO  [main:ModelCheckingServerAbstract@?] - First system steady state, start model checker thread
+2016-05-09 22:10:09,423 [myid:] - INFO  [Thread-2:PrototypeSamc$PathTraversalWorker@?] - Try to find new path/Continue from DPOR initial path
+2016-05-09 22:10:12,728 [myid:] - INFO  [Thread-2:PrototypeSamc$PathTraversalWorker@?] - Main path
+
+2016-05-09 22:10:12,729 [myid:] - DEBUG [Thread-2:SqliteExploredBranchRecorder@?] - Marked /root to be explored
+2016-05-09 22:10:12,729 [myid:] - INFO  [Thread-2:SqliteExploredBranchRecorder@?] - Marked /root to be explored
+2016-05-09 22:10:12,729 [myid:] - INFO  [Thread-2:PrototypeSamc@?] - There are 0 initial path of DPOR
+2016-05-09 22:10:12,739 [myid:] - DEBUG [Thread-2:SqliteExploredBranchRecorder@?] - Marked /root to be explored
+2016-05-09 22:10:12,739 [myid:] - INFO  [Thread-2:SqliteExploredBranchRecorder@?] - Marked /root to be explored
+2016-05-09 22:10:12,740 [myid:] - WARN  [Thread-2:PrototypeSamc$PathTraversalWorker@?] - Finished exploring all states
+2016-05-09 22:10:12,740 [myid:] - DEBUG [Thread-2:LeaderElectionEnsembleController@?] - Stopping ensemble
+2016-05-09 22:10:12,740 [myid:] - DEBUG [Thread-2:LeaderElectionEnsembleController@?] - Stopping node 0
+2016-05-09 22:10:12,949 [myid:] - DEBUG [Thread-2:LeaderElectionEnsembleController@?] - Stopping node 1
+2016-05-09 22:10:13,154 [myid:] - DEBUG [Thread-2:LeaderElectionEnsembleController@?] - Stopping node 2
+2016-05-09 22:10:13,372 [myid:] - DEBUG [Thread-4:LeaderElectionEnsembleController@?] - Stopping ensemble
+2016-05-09 22:10:13,372 [myid:] - DEBUG [Thread-4:LeaderElectionEnsembleController@?] - Stopping node 0
+2016-05-09 22:10:13,580 [myid:] - DEBUG [Thread-4:LeaderElectionEnsembleController@?] - Stopping node 1
+2016-05-09 22:10:13,788 [myid:] - DEBUG [Thread-4:LeaderElectionEnsembleController@?] - Stopping node 2
