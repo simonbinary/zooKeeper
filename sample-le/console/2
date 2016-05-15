@@ -2,9 +2,3 @@
 Starting zookeeper ... STARTED
 ZooKeeper JMX enabled by default
 Using config: /Users/wangsnowyin/Documents/zookeeper-3.5.1-alpha/bin/../conf/zoo3.cfg
-SLF4J: Class path contains multiple SLF4J bindings.
-SLF4J: Found binding in [jar:file:/Users/wangsnowyin/Documents/zookeeper-3.5.1-alpha/build/lib/slf4j-log4j12-1.7.5.jar!/org/slf4j/impl/StaticLoggerBinder.class]
-SLF4J: Found binding in [jar:file:/Users/wangsnowyin/Documents/zookeeper-3.5.1-alpha/lib/slf4j-log4j12-1.7.5.jar!/org/slf4j/impl/StaticLoggerBinder.class]
-SLF4J: Found binding in [jar:file:/Users/wangsnowyin/Documents/samc/samc-zookeeper/lib/slf4j-log4j12-1.6.1.jar!/org/slf4j/impl/StaticLoggerBinder.class]
-SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
-SLF4J: Actual binding is of type [org.slf4j.impl.Log4jLoggerFactory]

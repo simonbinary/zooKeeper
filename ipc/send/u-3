@@ -1,0 +1,5 @@
+sendNode=2
+sendRole=0
+strSendRole=LOOKING
+leader=2
+electionTable=
