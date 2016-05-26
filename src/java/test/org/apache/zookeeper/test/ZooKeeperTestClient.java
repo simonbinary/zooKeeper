@@ -33,7 +33,6 @@ import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.Watcher.Event.EventType;
 import org.apache.zookeeper.ZooDefs.Ids;
-import org.apache.zookeeper.common.Time;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.server.ServerCnxnFactory;
 import org.apache.zookeeper.server.ZooKeeperServer;
@@ -44,7 +43,7 @@ public class ZooKeeperTestClient extends ZKTestCase implements Watcher {
 
   protected static final String dirOnZK = "/test_dir";
 
-  protected String testDirOnZK = dirOnZK + "/" + Time.currentElapsedTime();
+  protected String testDirOnZK = dirOnZK + "/" + System.currentTimeMillis();
 
   LinkedBlockingQueue<WatchedEvent> events = new LinkedBlockingQueue<WatchedEvent>();
 

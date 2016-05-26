@@ -34,6 +34,7 @@ import org.apache.zookeeper.ZKTestCase;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.AsyncCallback.DataCallback;
+import org.apache.zookeeper.common.HostNameUtils;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.jmx.CommonNames;
 import org.apache.zookeeper.server.quorum.QuorumPeer;
@@ -170,7 +171,7 @@ public class ReconfigTest extends ZKTestCase implements DataCallback{
         return leaderId;
     }
 
-    public static ZooKeeper[] createHandles(QuorumUtil qu) throws IOException {
+    private ZooKeeper[] createHandles(QuorumUtil qu) throws IOException {
         // create an extra handle, so we can index the handles from 1 to qu.ALL
         // using the server id.
         ZooKeeper[] zkArr = new ZooKeeper[qu.ALL + 1];
@@ -186,7 +187,7 @@ public class ReconfigTest extends ZKTestCase implements DataCallback{
         return zkArr;
     }
 
-    public static void closeAllHandles(ZooKeeper[] zkArr) throws InterruptedException {
+    private void closeAllHandles(ZooKeeper[] zkArr) throws InterruptedException {
         for (ZooKeeper zk : zkArr)
             if (zk != null)
                 zk.close();
@@ -408,6 +409,43 @@ public class ReconfigTest extends ZKTestCase implements DataCallback{
     }
 
     @Test
+    public void testLeaderTimesoutOnNewQuorum() throws Exception {
+        qu = new QuorumUtil(1); // create 3 servers
+        qu.disableJMXTest = true;
+        qu.startAll();
+        ZooKeeper[] zkArr = createHandles(qu);
+
+        List<String> leavingServers = new ArrayList<String>();
+        leavingServers.add("3");
+        qu.shutdown(2);
+        try {
+            // Since we just shut down server 2, its still considered "synced"
+            // by the leader, which allows us to start the reconfig 
+            // (PrepRequestProcessor checks that a quorum of the new
+            // config is synced before starting a reconfig).
+            // We try to remove server 3, which requires a quorum of {1,2,3}
+            // (we have that) and of {1,2}, but 2 is down so we won't get a
+            // quorum of new config ACKs.
+            zkArr[1].reconfig(null, leavingServers, null, -1, null);
+            Assert.fail("Reconfig should have failed since we don't have quorum of new config");
+        } catch (KeeperException.ConnectionLossException e) {
+            // We expect leader to loose quorum of proposed config and time out
+        } catch (Exception e) {
+            Assert.fail("Should have been ConnectionLossException!");
+        }
+
+        // The leader should time out and remaining servers should go into
+        // LOOKING state. A new leader won't be established since that 
+        // would require completing the reconfig, which is not possible while
+        // 2 is down.
+        Assert.assertEquals(QuorumStats.Provider.LOOKING_STATE,
+                qu.getPeer(1).peer.getServerState());
+        Assert.assertEquals(QuorumStats.Provider.LOOKING_STATE,
+                qu.getPeer(3).peer.getServerState());
+        closeAllHandles(zkArr);
+    }
+
+    @Test
     public void testRemoveOneAsynchronous() throws Exception {
         qu = new QuorumUtil(2); 
         qu.disableJMXTest = true;
@@ -533,77 +571,84 @@ public class ReconfigTest extends ZKTestCase implements DataCallback{
         int leaderIndex = getLeaderId(qu);
         int followerIndex = leaderIndex == 1 ? 2 : 1;
 
-        // modify follower's client port
+        // change leader into observer, and modify all its ports at the same
+        // time
+        int observerIndex = leaderIndex;
 
-        int quorumPort = qu.getPeer(followerIndex).peer.getQuorumAddress().getPort();
-        int electionPort = qu.getPeer(followerIndex).peer.getElectionAddress().getPort(); 
-        int oldClientPort = qu.getPeer(followerIndex).peer.getClientPort();
-        int newClientPort = PortAssignment.unique();
-        joiningServers.add("server." + followerIndex + "=localhost:" + quorumPort
-                + ":" + electionPort + ":participant;localhost:" + newClientPort);
+        // new ports
+        int port1 = PortAssignment.unique();
+        int port2 = PortAssignment.unique();
+        int port3 = PortAssignment.unique();
+        joiningServers.add("server." + observerIndex + "=localhost:" + port1
+                + ":" + port2 + ":observer;localhost:" + port3);
 
         // create a /test znode and check that read/write works before
         // any reconfig is invoked
-        testNormalOperation(zkArr[followerIndex], zkArr[leaderIndex]);
+        testNormalOperation(zkArr[observerIndex], zkArr[followerIndex]);
 
         reconfig(zkArr[followerIndex], joiningServers, null, null, -1);
 
+        // the change of port may not be immediate -- we repeatedly
+        // invoke an operation expecting it to eventually fail once
+        // the client port of observerIndex changes. If it didn't
+        // change -- that's an error.
         try {
-          for (int i=0; i < 20; i++) {
+          for (int i=0; i < 30; i++) {
             Thread.sleep(1000);
-            zkArr[followerIndex].setData("/test", "teststr".getBytes(), -1);
+            zkArr[observerIndex].setData("/test", "teststr".getBytes(), -1);
           }
+          Assert.fail("client port didn't change");
         } catch (KeeperException.ConnectionLossException e) {
-            Assert.fail("Existing client disconnected when client port changed!");
+            zkArr[observerIndex] = new ZooKeeper("127.0.0.1:"
+                    + qu.getPeer(observerIndex).peer.getClientPort(),
+                    ClientBase.CONNECTION_TIMEOUT, new Watcher() {
+                        public void process(WatchedEvent event) {}});
         }
 
-        zkArr[followerIndex].close();
-        zkArr[followerIndex] = new ZooKeeper("127.0.0.1:"
-                + oldClientPort,
-                ClientBase.CONNECTION_TIMEOUT, new Watcher() {
-                    public void process(WatchedEvent event) {}});
-        for (int i = 0; i < 10; i++) {
-            try {
-                Thread.sleep(1000);
-                zkArr[followerIndex].setData("/test", "teststr".getBytes(), -1);
-                Assert.fail("New client connected to old client port!");
-            } catch (KeeperException.ConnectionLossException e) {
-            }
-        }
+        leaderIndex = getLeaderId(qu);
 
-        zkArr[followerIndex].close();
-        zkArr[followerIndex] = new ZooKeeper("127.0.0.1:"
-                + newClientPort,
-                ClientBase.CONNECTION_TIMEOUT, new Watcher() {
-                    public void process(WatchedEvent event) {}});
+        followerIndex = 1;
+        while (followerIndex == leaderIndex || followerIndex == observerIndex)
+            followerIndex++;
 
-        testNormalOperation(zkArr[followerIndex], zkArr[leaderIndex]);
-        testServerHasConfig(zkArr[followerIndex], joiningServers, null);
-        Assert.assertEquals(newClientPort, qu.getPeer(followerIndex).peer.getClientPort());
+        testNormalOperation(zkArr[observerIndex], zkArr[followerIndex]);
+
+        testServerHasConfig(zkArr[observerIndex], joiningServers, null);
+
+        Assert.assertTrue(qu.getPeer(observerIndex).peer.getQuorumAddress()
+                .getPort() == port1);
+        Assert.assertTrue(qu.getPeer(observerIndex).peer.getElectionAddress()
+                .getPort() == port2);
+        Assert.assertTrue(qu.getPeer(observerIndex).peer.getClientPort() == port3);
+        Assert.assertTrue(qu.getPeer(observerIndex).peer.getPeerState() == ServerState.OBSERVING);
+        Assert.assertTrue(qu.getPeer(observerIndex).peer.getName()
+                .endsWith(String.format(":%d", port3)));
 
         joiningServers.clear();
 
         // change leader's leading port - should renounce leadership
 
-        int newQuorumPort = PortAssignment.unique();
-        joiningServers.add("server." + leaderIndex + "=localhost:"
-                + newQuorumPort
+        port1 = PortAssignment.unique();
+        joiningServers.add("server." + leaderIndex + "=localhost:" + port1
                 + ":"
                 + qu.getPeer(leaderIndex).peer.getElectionAddress().getPort()
                 + ":participant;localhost:"
                 + qu.getPeer(leaderIndex).peer.getClientPort());
 
-        reconfig(zkArr[leaderIndex], joiningServers, null, null, -1);
+        reconfig(zkArr[followerIndex], joiningServers, null, null, -1);
 
-        testNormalOperation(zkArr[followerIndex], zkArr[leaderIndex]);
+        testNormalOperation(zkArr[observerIndex], zkArr[followerIndex]);
 
         Assert.assertTrue(qu.getPeer(leaderIndex).peer.getQuorumAddress()
-                .getPort() == newQuorumPort);
-        Assert.assertTrue(getLeaderId(qu) != leaderIndex); // the leader changed
+                .getPort() == port1);
+        Assert.assertTrue(qu.getPeer(leaderIndex).peer.leader == null
+                && qu.getPeer(leaderIndex).peer.follower != null);
+        Assert.assertTrue(qu.getPeer(followerIndex).peer.leader != null
+                && qu.getPeer(followerIndex).peer.follower == null);
 
         joiningServers.clear();
 
-        // change everyone's leader election port
+        // change in leader election port
 
         for (int i = 1; i <= 3; i++) {
             joiningServers.add("server." + i + "=localhost:"
@@ -639,7 +684,7 @@ public class ReconfigTest extends ZKTestCase implements DataCallback{
     	}
     	String server = "server.0=localhost:" + ports[0] + ":" + ports[1] + ";" + ports[2];
     	QuorumServer qs = new QuorumServer(0, server);
-    	Assert.assertEquals(qs.clientAddr.getHostString(), "0.0.0.0");
+    	Assert.assertEquals(qs.clientAddr.getHostName(), "0.0.0.0");
     	Assert.assertEquals(qs.clientAddr.getPort(), ports[2]);
     }
     
@@ -889,10 +934,12 @@ public class ReconfigTest extends ZKTestCase implements DataCallback{
         Assert.assertEquals("Mismatches LearnerType!", qp.getLearnerType()
                 .name(), JMXEnv.ensureBeanAttribute(beanName, "LearnerType"));
         Assert.assertEquals("Mismatches ClientAddress!",
-                qp.getClientAddress().getHostString() + ":" + qp.getClientAddress().getPort(),
+                HostNameUtils.getHostString(qp.getClientAddress()) + ":"
+                        + qp.getClientAddress().getPort(),
                 JMXEnv.ensureBeanAttribute(beanName, "ClientAddress"));
         Assert.assertEquals("Mismatches LearnerType!",
-                qp.getElectionAddress().getHostString() + ":" + qp.getElectionAddress().getPort(),
+                HostNameUtils.getHostString(qp.getElectionAddress()) + ":"
+                        + qp.getElectionAddress().getPort(),
                 JMXEnv.ensureBeanAttribute(beanName, "ElectionAddress"));
         Assert.assertEquals("Mismatches PartOfEnsemble!", isPartOfEnsemble,
                 JMXEnv.ensureBeanAttribute(beanName, "PartOfEnsemble"));
@@ -927,13 +974,19 @@ public class ReconfigTest extends ZKTestCase implements DataCallback{
         Assert.assertEquals("Mismatches LearnerType!", qs.type.name(),
                 JMXEnv.ensureBeanAttribute(beanName, "LearnerType"));
         Assert.assertEquals("Mismatches ClientAddress!",
-                getNumericalAddrPort(qs.clientAddr.getHostString() + ":" + qs.clientAddr.getPort()),
+                getNumericalAddrPort(
+                        HostNameUtils.getHostString(qs.clientAddr) + ":"
+                        + qs.clientAddr.getPort() ),
                 getAddrPortFromBean(beanName, "ClientAddress") );
         Assert.assertEquals("Mismatches ElectionAddress!",
-                getNumericalAddrPort(qs.electionAddr.getHostString() + ":" + qs.electionAddr.getPort()),
+                getNumericalAddrPort(
+                        HostNameUtils.getHostString(qs.electionAddr) + ":"
+                        + qs.electionAddr.getPort() ),
                 getAddrPortFromBean(beanName, "ElectionAddress") );
         Assert.assertEquals("Mismatches QuorumAddress!",
-                getNumericalAddrPort(qs.addr.getHostString() + ":" + qs.addr.getPort()),
+                getNumericalAddrPort(
+                        qs.addr.getHostName() + ":"
+                        + qs.addr.getPort() ),
                 getAddrPortFromBean(beanName, "QuorumAddress") );
     }
 }

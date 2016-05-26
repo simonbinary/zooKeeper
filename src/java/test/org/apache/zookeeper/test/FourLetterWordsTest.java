@@ -25,10 +25,7 @@ import java.util.regex.Pattern;
 
 import org.apache.zookeeper.TestableZooKeeper;
 import org.apache.zookeeper.ZooKeeper;
-import org.apache.zookeeper.common.X509Exception.SSLContextException;
-
 import static org.apache.zookeeper.client.FourLetterWordMain.send4LetterWord;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -58,8 +55,6 @@ public class FourLetterWordsTest extends ClientBase {
         verify("stat", "Outstanding");
         verify("srvr", "Outstanding");
         verify("cons", "queued");
-        verify("gtmk", "306");
-        verify("isro", "rw");
 
         TestableZooKeeper zk = createClient();
         String sid = getHexSessionId(zk.getSessionId());
@@ -68,7 +63,6 @@ public class FourLetterWordsTest extends ClientBase {
         verify("srvr", "Outstanding");
         verify("cons", sid);
         verify("dump", sid);
-        verify("dirs", "size");
 
         zk.getData("/", true, null);
 
@@ -80,7 +74,6 @@ public class FourLetterWordsTest extends ClientBase {
         verify("wchs", "watching 1");
         verify("wchp", sid);
         verify("wchc", sid);
-        verify("dirs", "size");
         zk.close();
 
         verify("ruok", "imok");
@@ -104,26 +97,21 @@ public class FourLetterWordsTest extends ClientBase {
         verify("mntr", "num_alive_connections");
         verify("stat", "Connections");
         verify("srvr", "Connections");
-        verify("dirs", "size");
     }
 
-    private String sendRequest(String cmd) throws IOException, SSLContextException {
+    private String sendRequest(String cmd) throws IOException {
       HostPort hpobj = ClientBase.parseHostPortList(hostPort).get(0);
       return send4LetterWord(hpobj.host, hpobj.port, cmd);
     }
-    private String sendRequest(String cmd, int timeout) throws IOException, SSLContextException {
-        HostPort hpobj = ClientBase.parseHostPortList(hostPort).get(0);
-        return send4LetterWord(hpobj.host, hpobj.port, cmd, false, timeout);
-      }
 
-    private void verify(String cmd, String expected) throws IOException, SSLContextException {
+    private void verify(String cmd, String expected) throws IOException {
         String resp = sendRequest(cmd);
         LOG.info("cmd " + cmd + " expected " + expected + " got " + resp);
         Assert.assertTrue(resp.contains(expected));
     }
     
     @Test
-    public void testValidateStatOutput() throws Exception {
+    public void validateStatOutput() throws Exception {
         ZooKeeper zk1 = createClient();
         ZooKeeper zk2 = createClient();
         
@@ -166,7 +154,7 @@ public class FourLetterWordsTest extends ClientBase {
     }
 
     @Test
-    public void testValidateConsOutput() throws Exception {
+    public void validateConsOutput() throws Exception {
         ZooKeeper zk1 = createClient();
         ZooKeeper zk2 = createClient();
         
@@ -184,15 +172,5 @@ public class FourLetterWordsTest extends ClientBase {
 
         zk1.close();
         zk2.close();
-    }
-
-    @Test(timeout=60000)
-    public void testValidateSocketTimeout() throws Exception {
-        /**
-         * testing positive scenario that even with timeout parameter the
-         * functionality works fine
-         */
-        String resp = sendRequest("isro", 2000);
-        Assert.assertTrue(resp.contains("rw"));
     }
 }

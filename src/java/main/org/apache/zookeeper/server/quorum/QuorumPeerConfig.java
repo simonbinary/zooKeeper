@@ -19,24 +19,22 @@
 package org.apache.zookeeper.server.quorum;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StringReader;
 import java.io.Writer;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Map.Entry;
 
-import org.apache.zookeeper.common.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -54,15 +52,12 @@ import org.apache.zookeeper.server.util.VerifyingFileFactory;
 
 public class QuorumPeerConfig {
     private static final Logger LOG = LoggerFactory.getLogger(QuorumPeerConfig.class);
-    private static final int UNSET_SERVERID = -1;
-    public static final String nextDynamicConfigFileSuffix = ".dynamic.next";
-
     private static boolean standaloneEnabled = true;
 
     protected InetSocketAddress clientPortAddress;
-    protected InetSocketAddress secureClientPortAddress;
     protected File dataDir;
     protected File dataLogDir;
+    protected boolean configBackwardCompatibilityMode = false;
     protected String dynamicConfigFileStr = null;
     protected String configFileStr = null;
     protected int tickTime = ZooKeeperServer.DEFAULT_TICK_TIME;
@@ -80,7 +75,7 @@ public class QuorumPeerConfig {
     protected int electionPort = 2182;
     protected boolean quorumListenOnAllIPs = false;
 
-    protected long serverId = UNSET_SERVERID;
+    protected long serverId;
 
     protected QuorumVerifier quorumVerifier = null, lastSeenQuorumVerifier = null;
     protected int snapRetainCount = 3;
@@ -141,27 +136,18 @@ public class QuorumPeerConfig {
                FileInputStream inConfig = new FileInputStream(dynamicConfigFileStr);
                try {
                    dynamicCfg.load(inConfig);
-                   if (dynamicCfg.getProperty("version") != null) {
-                       throw new ConfigException("dynamic file shouldn't have version inside");
-                   }
-
-                   String version = getVersionFromFilename(dynamicConfigFileStr);
-                   // If there isn't any version associated with the filename,
-                   // the default version is 0.
-                   if (version != null) {
-                       dynamicCfg.setProperty("version", version);
-                   }
                } finally {
                    inConfig.close();
                }
-               setupQuorumPeerConfig(dynamicCfg, false);
-
+               quorumVerifier = parseDynamicConfig(dynamicCfg, electionAlg, true, configBackwardCompatibilityMode);
+               checkValidity();
+           
            } catch (IOException e) {
                throw new ConfigException("Error processing " + dynamicConfigFileStr, e);
            } catch (IllegalArgumentException e) {
                throw new ConfigException("Error processing " + dynamicConfigFileStr, e);
            }        
-           File nextDynamicConfigFile = new File(configFileStr + nextDynamicConfigFileSuffix);
+           File nextDynamicConfigFile = new File(dynamicConfigFileStr + ".next");
            if (nextDynamicConfigFile.exists()) {
                try {           
                    Properties dynamicConfigNextCfg = new Properties();
@@ -179,30 +165,11 @@ public class QuorumPeerConfig {
                            break;
                        }
                    }
-                   lastSeenQuorumVerifier = createQuorumVerifier(dynamicConfigNextCfg, isHierarchical);
+                   lastSeenQuorumVerifier = createQuorumVerifier(dynamicConfigNextCfg, isHierarchical);    
                } catch (IOException e) {
                    LOG.warn("NextQuorumVerifier is initiated to null");
                }
            }
-        }
-    }
-
-    // This method gets the version from the end of dynamic file name.
-    // For example, "zoo.cfg.dynamic.0" returns initial version "0".
-    // "zoo.cfg.dynamic.1001" returns version of hex number "0x1001".
-    // If a dynamic file name doesn't have any version at the end of file,
-    // e.g. "zoo.cfg.dynamic", it returns null.
-    public static String getVersionFromFilename(String filename) {
-        int i = filename.lastIndexOf('.');
-        if(i < 0 || i >= filename.length())
-            return null;
-
-        String hexVersion = filename.substring(i + 1);
-        try {
-            long version = Long.parseLong(hexVersion, 16);
-            return Long.toHexString(version);
-        } catch (NumberFormatException e) {
-            return null;
         }
     }
 
@@ -215,9 +182,7 @@ public class QuorumPeerConfig {
     public void parseProperties(Properties zkProp)
     throws IOException, ConfigException {
         int clientPort = 0;
-        int secureClientPort = 0;
         String clientPortAddress = null;
-        String secureClientPortAddress = null;
         VerifyingFileFactory vff = new VerifyingFileFactory.Builder(LOG).warnForRelativePath().build();
         for (Entry<Object, Object> entry : zkProp.entrySet()) {
             String key = entry.getKey().toString().trim();
@@ -234,10 +199,6 @@ public class QuorumPeerConfig {
                 localSessionsUpgradingEnabled = Boolean.parseBoolean(value);
             } else if (key.equals("clientPortAddress")) {
                 clientPortAddress = value.trim();
-            } else if (key.equals("secureClientPort")) {
-                secureClientPort = Integer.parseInt(value);
-            } else if (key.equals("secureClientPortAddress")){
-                secureClientPortAddress = value.trim();
             } else if (key.equals("tickTime")) {
                 tickTime = Integer.parseInt(value);
             } else if (key.equals("maxClientCnxns")) {
@@ -301,35 +262,15 @@ public class QuorumPeerConfig {
         if (dataLogDir == null) {
             dataLogDir = dataDir;
         }
-
-        if (clientPort == 0) {
-            LOG.info("clientPort is not set");
-            if (this.clientPortAddress != null) {
-                throw new IllegalArgumentException("clientPortAddress is set but clientPort is not set");
-            }
-        } else if (clientPortAddress != null) {
-            this.clientPortAddress = new InetSocketAddress(
-                    InetAddress.getByName(clientPortAddress), clientPort);
-            LOG.info("clientPortAddress is {}", this.clientPortAddress.toString());
-        } else {
-            this.clientPortAddress = new InetSocketAddress(clientPort);
-            LOG.info("clientPortAddress is {}", this.clientPortAddress.toString());
+        if (clientPortAddress != null) {
+           if (clientPort == 0) {
+               throw new IllegalArgumentException("clientPortAddress is set but clientPort is not set");
         }
-
-        if (secureClientPort == 0) {
-            LOG.info("secureClientPort is not set");
-            if (this.secureClientPortAddress != null) {
-                throw new IllegalArgumentException("clientPortAddress is set but clientPort is not set");
-            }
-        } else if (secureClientPortAddress != null) {
-            this.secureClientPortAddress = new InetSocketAddress(
-                    InetAddress.getByName(secureClientPortAddress), secureClientPort);
-            LOG.info("secureClientPortAddress is {}", this.secureClientPortAddress.toString());
-        } else {
-            this.secureClientPortAddress = new InetSocketAddress(secureClientPort);
-            LOG.info("secureClientPortAddress is {}", this.secureClientPortAddress.toString());
-        }
-
+             this.clientPortAddress = new InetSocketAddress(
+                      InetAddress.getByName(clientPortAddress), clientPort);
+        } else if (clientPort!=0){
+             this.clientPortAddress = new InetSocketAddress(clientPort);
+        }    
         if (tickTime == 0) {
             throw new IllegalArgumentException("tickTime is not set");
         }
@@ -343,85 +284,53 @@ public class QuorumPeerConfig {
         }          
 
         // backward compatibility - dynamic configuration in the same file as
-        // static configuration params see writeDynamicConfig()
+        // static configuration params see writeDynamicConfig() - we change the
+        // config file to new format if reconfig happens
         if (dynamicConfigFileStr == null) {
-            setupQuorumPeerConfig(zkProp, true);
-            if (isDistributed()) {
-                // we don't backup static config for standalone mode.
-                backupOldConfig();
-            }
+            configBackwardCompatibilityMode = true;
+            quorumVerifier = parseDynamicConfig(zkProp, electionAlg, true,
+                configBackwardCompatibilityMode);
+            checkValidity();
         }
     }
-
+    
     /**
-     * Backward compatibility -- It would backup static config file on bootup
-     * if users write dynamic configuration in "zoo.cfg".
+     * Writes dynamic configuration file, updates static config file if needed. 
+     * @param dynamicConfigFilename
+     * @param configFileStr
+     * @param configBackwardCompatibilityMode
+     * @param qv
+     * @param needEraseStaticClientInfo indicates whether we need to erase the clientPort
+     *                    and clientPortAddress from static config file.
      */
-    private void backupOldConfig() throws IOException {
-        new AtomicFileWritingIdiom(new File(configFileStr + ".bak"), new OutputStreamStatement() {
+    public static void writeDynamicConfig(String dynamicConfigFilename, String configFileStr,
+            final boolean configBackwardCompatibilityMode, final QuorumVerifier qv,
+            final boolean needEraseStaticClientInfo) throws IOException {
+
+        final String actualDynamicConfigFilename = dynamicConfigFilename;
+        new AtomicFileWritingIdiom(new File(actualDynamicConfigFilename), new OutputStreamStatement() {
             @Override
-            public void write(OutputStream output) throws IOException {
-                InputStream input = null;
-                try {
-                    input = new FileInputStream(new File(configFileStr));
-                    byte[] buf = new byte[1024];
-                    int bytesRead;
-                    while ((bytesRead = input.read(buf)) > 0) {
-                        output.write(buf, 0, bytesRead);
-                    }
-                } finally {
-                    if( input != null) {
-                        input.close();
-                    }
-                }
+            public void write(OutputStream outConfig) throws IOException {
+                byte b[] = qv.toString().getBytes();
+                outConfig.write(b);
             }
         });
+        // the following is for users who run without a dynamic config file (old config file)
+        // we create a dynamic config file, remove all the dynamic definitions from the config file and add a pointer
+        // to the config file. The dynamic config file's name will be the same as the config file's
+        // with ".dynamic" appended to it
+
+        if (!configBackwardCompatibilityMode && !needEraseStaticClientInfo)
+            return;
+
+        editStaticConfig(configFileStr, actualDynamicConfigFilename,
+                configBackwardCompatibilityMode, needEraseStaticClientInfo);
     }
 
-    /**
-     * Writes dynamic configuration file
-     */
-    public static void writeDynamicConfig(final String dynamicConfigFilename,
-                                          final QuorumVerifier qv,
-                                          final boolean needKeepVersion)
-            throws IOException {
-
-        new AtomicFileWritingIdiom(new File(dynamicConfigFilename), new WriterStatement() {
-            @Override
-            public void write(Writer out) throws IOException {
-                Properties cfg = new Properties();
-                cfg.load( new StringReader(
-                        qv.toString()));
-
-                List<String> servers = new ArrayList<String>();
-                for (Entry<Object, Object> entry : cfg.entrySet()) {
-                    String key = entry.getKey().toString().trim();
-                    if ( !needKeepVersion && key.startsWith("version"))
-                        continue;
-
-                    String value = entry.getValue().toString().trim();
-                    servers.add(key
-                            .concat("=")
-                            .concat(value));
-                }
-
-                Collections.sort(servers);
-                out.write(StringUtils.joinStrings(servers, "\n"));
-            }
-        });
-    }
-
-    /**
-     * Edit static config file.
-     * If there are quorum information in static file, e.g. "server.X", "group",
-     * it will remove them.
-     * If it needs to erase client port information left by the old config,
-     * "eraseClientPortAddress" should be set true.
-     * It should also updates dynamic file pointer on reconfig.
-     */
-    public static void editStaticConfig(final String configFileStr,
-                                        final String dynamicFileStr,
-                                        final boolean eraseClientPortAddress)
+    private static void editStaticConfig(final String configFileStr,
+                                         final String dynamicFileStr,
+                                         final boolean backwardCompatible,
+                                         final boolean eraseClientPortAddress)
             throws IOException {
         // Some tests may not have a static config file.
         if (configFileStr == null)
@@ -432,11 +341,6 @@ public class QuorumPeerConfig {
                 .failForNonExistingPath()
                 .build()).create(configFileStr);
 
-        final File dynamicFile = (new VerifyingFileFactory.Builder(LOG)
-                .warnForRelativePath()
-                .failForNonExistingPath()
-                .build()).create(dynamicFileStr);
-        
         final Properties cfg = new Properties();
         FileInputStream in = new FileInputStream(configFile);
         try {
@@ -454,7 +358,6 @@ public class QuorumPeerConfig {
                     if (key.startsWith("server.")
                         || key.startsWith("group")
                         || key.startsWith("weight")
-                        || key.startsWith("dynamicConfigFile")
                         || (eraseClientPortAddress
                             && (key.startsWith("clientPort")
                                 || key.startsWith("clientPortAddress")))) {
@@ -466,10 +369,10 @@ public class QuorumPeerConfig {
                     out.write(key.concat("=").concat(value).concat("\n"));
                 }
 
-                // updates the dynamic file pointer
-                out.write("dynamicConfigFile="
-                         .concat(dynamicFile.getCanonicalPath())
-                         .concat("\n"));
+                if ( ! backwardCompatible )
+                    return;
+
+                out.write("dynamicConfigFile=".concat(dynamicFileStr).concat("\n"));
             }
         });
     }
@@ -498,16 +401,7 @@ public class QuorumPeerConfig {
             return new QuorumMaj(dynamicConfigProp);            
         }          
     }
-
-    void setupQuorumPeerConfig(Properties prop, boolean configBackwardCompatibilityMode)
-            throws IOException, ConfigException {
-        quorumVerifier = parseDynamicConfig(prop, electionAlg, true, configBackwardCompatibilityMode);
-        setupMyId();
-        setupClientPort();
-        setupPeerType();
-        checkValidity();
-    }
-
+    
     /**
      * Parse dynamic configuration file and return
      * quorumVerifier for new configuration.
@@ -533,10 +427,6 @@ public class QuorumPeerConfig {
         int numParticipators = qv.getVotingMembers().size();
         int numObservers = qv.getObservingMembers().size();
         if (numParticipators == 0) {
-            if (!standaloneEnabled) {
-                throw new IllegalArgumentException("standaloneEnabled = false then " +
-                        "number of participants should be >0");
-            }
             if (numObservers > 0) {
                 throw new IllegalArgumentException("Observers w/o participants is an invalid configuration");
             }
@@ -572,75 +462,68 @@ public class QuorumPeerConfig {
         }
         return qv;
     }
-
-    private void setupMyId() throws IOException {
-        File myIdFile = new File(dataDir, "myid");
-        // standalone server doesn't need myid file.
-        if (!myIdFile.isFile()) {
-            return;
-        }
-        BufferedReader br = new BufferedReader(new FileReader(myIdFile));
-        String myIdString;
-        try {
-            myIdString = br.readLine();
-        } finally {
-            br.close();
-        }
-        try {
-            serverId = Long.parseLong(myIdString);
-            MDC.put("myid", myIdString);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("serverid " + myIdString
-                    + " is not a number");
-        }
-    }
-
-    private void setupClientPort() throws ConfigException {
-        if (serverId == UNSET_SERVERID) {
-            return;
-        }
-        QuorumServer qs = quorumVerifier.getAllMembers().get(serverId);
-        if (clientPortAddress != null && qs != null && qs.clientAddr != null) {
-            if ((!clientPortAddress.getAddress().isAnyLocalAddress()
-                    && !clientPortAddress.equals(qs.clientAddr)) ||
-                    (clientPortAddress.getAddress().isAnyLocalAddress()
-                            && clientPortAddress.getPort() != qs.clientAddr.getPort()))
-                throw new ConfigException("client address for this server (id = " + serverId +
-                        ") in static config file is " + clientPortAddress +
-                        " is different from client address found in dynamic file: " + qs.clientAddr);
-        }
-        if (qs != null && qs.clientAddr != null) clientPortAddress = qs.clientAddr;
-    }
-
-    private void setupPeerType() {
-        // Warn about inconsistent peer type
-        LearnerType roleByServersList = quorumVerifier.getObservingMembers().containsKey(serverId) ? LearnerType.OBSERVER
-                : LearnerType.PARTICIPANT;
-        if (roleByServersList != peerType) {
-            LOG.warn("Peer type from servers list (" + roleByServersList
-                    + ") doesn't match peerType (" + peerType
-                    + "). Defaulting to servers list.");
-
-            peerType = roleByServersList;
-        }
-    }
+    
 
     public void checkValidity() throws IOException, ConfigException{
-        if (isDistributed()) {
-            if (initLimit == 0) {
-                throw new IllegalArgumentException("initLimit is not set");
+       int numMembers = quorumVerifier.getVotingMembers().size();
+       if (numMembers > 1  || (!standaloneEnabled && numMembers > 0)) {
+           if (initLimit == 0) {
+               throw new IllegalArgumentException("initLimit is not set");
+           }
+           if (syncLimit == 0) {
+               throw new IllegalArgumentException("syncLimit is not set");
+           }
+            
+                                     
+            File myIdFile = new File(dataDir, "myid");
+            if (!myIdFile.exists()) {
+                throw new IllegalArgumentException(myIdFile.toString()
+                        + " file is missing");
             }
-            if (syncLimit == 0) {
-                throw new IllegalArgumentException("syncLimit is not set");
+            BufferedReader br = new BufferedReader(new FileReader(myIdFile));
+            String myIdString;
+            try {
+                myIdString = br.readLine();
+            } finally {
+                br.close();
             }
-            if (serverId == UNSET_SERVERID) {
-                throw new IllegalArgumentException("myid file is missing");
+            try {
+                serverId = Long.parseLong(myIdString);
+                MDC.put("myid", myIdString);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("serverid " + myIdString
+                        + " is not a number");
             }
-       }
-    }
 
+            QuorumServer qs = quorumVerifier.getAllMembers().get(serverId);
+            if (clientPortAddress!=null && qs!=null && qs.clientAddr!=null){ 
+                if ((!clientPortAddress.getAddress().isAnyLocalAddress()
+                       && !clientPortAddress.equals(qs.clientAddr)) || 
+                   (clientPortAddress.getAddress().isAnyLocalAddress() 
+                       && clientPortAddress.getPort()!=qs.clientAddr.getPort())) 
+                    throw new ConfigException("client address for this server (id = " + serverId + ") in static config file is " + clientPortAddress + " is different from client address found in dynamic file: " + qs.clientAddr);
+                else {
+                    editStaticConfig(configFileStr, null, false, true);
+                }
+            }
+            if (qs!=null && qs.clientAddr != null) clientPortAddress = qs.clientAddr;                       
+            
+            // Warn about inconsistent peer type
+            LearnerType roleByServersList = quorumVerifier.getObservingMembers().containsKey(serverId) ? LearnerType.OBSERVER
+                    : LearnerType.PARTICIPANT;
+            if (roleByServersList != peerType) {
+                LOG.warn("Peer type from servers list (" + roleByServersList
+                        + ") doesn't match peerType (" + peerType
+                        + "). Defaulting to servers list.");
+
+                peerType = roleByServersList;
+            }
+           
+       }
+       
+    }
+    
     public InetSocketAddress getClientPortAddress() { return clientPortAddress; }
-    public InetSocketAddress getSecureClientPortAddress() { return secureClientPortAddress; }
     public File getDataDir() { return dataDir; }
     public File getDataLogDir() { return dataLogDir; }
     public int getTickTime() { return tickTime; }
@@ -691,9 +574,17 @@ public class QuorumPeerConfig {
     public LearnerType getPeerType() {
         return peerType;
     }
-
+    
+    public String getDynamicConfigFilename() {
+       return dynamicConfigFileStr;
+    }
+    
     public String getConfigFilename(){
         return configFileStr;
+    }
+    
+    public boolean getConfigBackwardCompatibility(){
+        return configBackwardCompatibilityMode;
     }
     
     public Boolean getQuorumListenOnAllIPs() {

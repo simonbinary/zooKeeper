@@ -32,7 +32,6 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.mortbay.jetty.Server;
-import org.mortbay.jetty.nio.SelectChannelConnector;
 import org.mortbay.jetty.servlet.Context;
 import org.mortbay.jetty.servlet.ServletHolder;
 import org.slf4j.Logger;
@@ -55,36 +54,26 @@ public class JettyAdminServer implements AdminServer {
     static final Logger LOG = LoggerFactory.getLogger(JettyAdminServer.class);
 
     public static final int DEFAULT_PORT = 8080;
-    private static final String DEFAULT_ADDRESS = "0.0.0.0";
     public static final String DEFAULT_COMMAND_URL = "/commands";
 
     private final Server server;
     private ZooKeeperServer zkServer;
     private final int port;
-    private String address;
     private final String commandUrl;
 
     public JettyAdminServer() throws AdminServerException {
-        this(System.getProperty("zookeeper.admin.serverAddress",
-                DEFAULT_ADDRESS), Integer.getInteger(
-                "zookeeper.admin.serverPort", DEFAULT_PORT), System
-                .getProperty("zookeeper.admin.commandURL", DEFAULT_COMMAND_URL));
+        this(Integer.getInteger("zookeeper.admin.serverPort", DEFAULT_PORT),
+             System.getProperty("zookeeper.admin.commandURL", DEFAULT_COMMAND_URL));
     }
 
-    public JettyAdminServer(String address, int port, String commandUrl) {
+    public JettyAdminServer(int port, String commandUrl) {
         this.port = port;
         this.commandUrl = commandUrl;
-        this.address = address;
 
-        server = new Server();
-        SelectChannelConnector connector = new SelectChannelConnector();
-        connector.setHost(address);
-        connector.setPort(port);
-        server.addConnector(connector);
+        server = new Server(port);
         Context context = new Context(server, "/");
         server.setHandler(context);
-        context.addServlet(new ServletHolder(new CommandServlet()), commandUrl
-                + "/*");
+        context.addServlet(new ServletHolder(new CommandServlet()), commandUrl + "/*");
     }
 
     /**
@@ -97,13 +86,12 @@ public class JettyAdminServer implements AdminServer {
         } catch (Exception e) {
             // Server.start() only throws Exception, so let's at least wrap it
             // in an identifiable subclass
-            throw new AdminServerException(String.format(
-                    "Problem starting AdminServer on address %s,"
-                            + " port %d and command URL %s", address, port,
-                    commandUrl), e);
+            throw new AdminServerException(
+                    String.format("Problem starting AdminServer on port %d, command URL %s",
+                                  port, commandUrl), e);
         }
-        LOG.info(String.format("Started AdminServer on address %s, port %d"
-                + " and command URL %s", address, port, commandUrl));
+        LOG.info(String.format("Started AdminServer on port %d, command URL %s",
+                               port, commandUrl));
     }
 
     /**
@@ -118,10 +106,9 @@ public class JettyAdminServer implements AdminServer {
         try {
             server.stop();
         } catch (Exception e) {
-            throw new AdminServerException(String.format(
-                    "Problem stopping AdminServer on address %s,"
-                            + " port %d and command URL %s", address, port, commandUrl),
-                    e);
+            throw new AdminServerException(
+                    String.format("Problem stopping AdminServer on port %d, command URL %s",
+                                  port, commandUrl), e);
         }
     }
 

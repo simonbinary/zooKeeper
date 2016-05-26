@@ -18,7 +18,8 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import org.apache.zookeeper.common.Time;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,11 +97,11 @@ public class LearnerSnapshotThrottler {
             if (!essential
                 && timeoutMillis > 0
                 && snapsInProgress >= maxConcurrentSnapshots) {
-                long timestamp = Time.currentElapsedTime();
+                long timestamp = System.currentTimeMillis();
                 do {
                     snapCountSyncObject.wait(timeoutMillis);
                 } while (snapsInProgress >= maxConcurrentSnapshots
-                         && timestamp + timeoutMillis < Time.currentElapsedTime());
+                         && timestamp + timeoutMillis < System.currentTimeMillis());
             }
 
             if (essential || snapsInProgress < maxConcurrentSnapshots) {

@@ -63,8 +63,6 @@ import org.apache.zookeeper.server.MockSelectorThread;
 import org.apache.zookeeper.server.ZKDatabase;
 import org.apache.zookeeper.server.ZooTrace;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
-import org.apache.zookeeper.ZKParameterized;
-import org.junit.Before;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -75,7 +73,6 @@ import org.slf4j.LoggerFactory;
  * Demonstrate ZOOKEEPER-1382 : Watches leak on expired session
  */
 @RunWith(Parameterized.class)
-@Parameterized.UseParametersRunnerFactory(ZKParameterized.RunnerFactory.class)
 public class WatchLeakTest {
 
     protected static final Logger LOG = LoggerFactory
@@ -84,11 +81,6 @@ public class WatchLeakTest {
     final long SESSION_ID = 0xBABEL;
 
     private final boolean sessionTimedout;
-
-    @Before
-    public void setUp() {
-        System.setProperty("zookeeper.admin.enableServer", "false");
-    }
 
     public WatchLeakTest(boolean sessionTimedout) {
         this.sessionTimedout = sessionTimedout;

@@ -19,7 +19,6 @@ package org.apache.zookeeper.server.quorum;
 
 import java.nio.ByteBuffer;
 
-import org.apache.zookeeper.ZKTestCase;
 import org.apache.zookeeper.server.quorum.FastLeaderElection;
 import org.apache.zookeeper.server.quorum.QuorumPeer;
 import org.apache.zookeeper.server.quorum.Vote;
@@ -30,7 +29,7 @@ import org.junit.Assert;
 
 import org.apache.zookeeper.server.quorum.QuorumPeer.ServerState;
 
-public class FLETestUtils extends ZKTestCase {
+public class FLETestUtils {
     protected static final Logger LOG = LoggerFactory.getLogger(FLETestUtils.class);
 
     /*

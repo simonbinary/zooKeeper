@@ -18,6 +18,7 @@
 
 package org.apache.zookeeper.server.quorum;
 
+import org.apache.zookeeper.common.HostNameUtils;
 
 /**
  * Implementation of the local peer MBean interface.
@@ -78,13 +79,13 @@ public class LocalPeerBean extends ServerBean implements LocalPeerMXBean {
     }
 
     public String getElectionAddress() {
-        return peer.getElectionAddress().getHostString() + ":" +
-            peer.getElectionAddress().getPort();
+        return HostNameUtils.getHostString(peer.getElectionAddress()) + ":"
+                + peer.getElectionAddress().getPort();
     }
 
     public String getClientAddress() {
-        return peer.getClientAddress().getHostString() + ":" +
-            peer.getClientAddress().getPort();
+        return HostNameUtils.getHostString(peer.getClientAddress()) + ":"
+                + peer.getClientAddress().getPort();
     }
 
     public String getLearnerType(){

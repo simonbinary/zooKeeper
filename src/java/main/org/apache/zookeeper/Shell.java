@@ -39,11 +39,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.log4j.Logger;
-import org.apache.zookeeper.common.Time;
 
-/**
+/** 
  * A base class for running a Unix command.
- *
+ * 
  * <code>Shell</code> can be used to run unix commands like <code>du</code> or
  * <code>df</code>. It also offers facilities to gate commands by 
  * time-intervals.
@@ -147,7 +146,7 @@ abstract public class Shell {
 
   /** check to see if a command needs to be executed and execute if needed */
   protected void run() throws IOException {
-    if (lastTime + interval > Time.currentElapsedTime())
+    if (lastTime + interval > System.currentTimeMillis())
       return;
     exitCode = 0; // reset for next run
     runCommand();
@@ -246,7 +245,7 @@ abstract public class Shell {
         LOG.warn("Error while closing the error stream", ioe);
       }
       process.destroy();
-      lastTime = Time.currentElapsedTime();
+      lastTime = System.currentTimeMillis();
     }
   }
 

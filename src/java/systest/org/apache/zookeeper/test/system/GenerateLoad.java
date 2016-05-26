@@ -53,8 +53,6 @@ import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.common.Time;
-
 
 public class GenerateLoad {
     protected static final Logger LOG = LoggerFactory.getLogger(GenerateLoad.class);
@@ -196,7 +194,7 @@ public class GenerateLoad {
 
         public void run() {
             try {
-                currentInterval = Time.currentElapsedTime() / INTERVAL;
+                currentInterval = System.currentTimeMillis() / INTERVAL;
                 // Give things time to report;
                 Thread.sleep(INTERVAL * 2);
                 long min = 99999;
@@ -204,7 +202,7 @@ public class GenerateLoad {
                 long total = 0;
                 int number = 0;
                 while (true) {
-                    long now = Time.currentElapsedTime();
+                    long now = System.currentTimeMillis();
                     long lastInterval = currentInterval;
                     currentInterval += 1;
                     long count = remove(lastInterval);
@@ -251,13 +249,13 @@ public class GenerateLoad {
     }
 
     synchronized static void sendChange(int percentage) {
-        long now = Time.currentElapsedTime();
+        long now = System.currentTimeMillis();
         long start = now;
         ReporterThread.percentage = percentage;
         for (SlaveThread st : slaves.toArray(new SlaveThread[0])) {
             st.send(percentage);
         }
-        now = Time.currentElapsedTime();
+        now = System.currentTimeMillis();
         long delay = now - start;
         if (delay > 1000) {
             System.out.println("Delay of " + delay + " to send new percentage");
@@ -389,7 +387,7 @@ public class GenerateLoad {
                         errors++;
                     } else {
                         finished++;
-                        rlatency += Time.currentElapsedTime() - (Long) ctx;
+                        rlatency += System.currentTimeMillis() - (Long) ctx;
                         reads++;
                     }
                 }
@@ -403,7 +401,7 @@ public class GenerateLoad {
                         errors++;
                     } else {
                         finished++;
-                        wlatency += Time.currentElapsedTime() - (Long) ctx;
+                        wlatency += System.currentTimeMillis() - (Long) ctx;
                         writes++;
                     }
                 }
@@ -429,7 +427,7 @@ public class GenerateLoad {
                         if (percentage == -1 || (finished == 0 && errors == 0)) {
                             continue;
                         }
-                        String report = Time.currentElapsedTime() + " "
+                        String report = System.currentTimeMillis() + " "
                                 + percentage + " " + finished + " " + errors + " "
                                 + outstanding + "\n";
                        /* String subreport = reads + " "
@@ -545,9 +543,9 @@ public class GenerateLoad {
 
         synchronized public boolean waitConnected(long timeout)
                 throws InterruptedException {
-            long endTime = Time.currentElapsedTime() + timeout;
-            while (!connected && Time.currentElapsedTime() < endTime) {
-                wait(endTime - Time.currentElapsedTime());
+            long endTime = System.currentTimeMillis() + timeout;
+            while (!connected && System.currentTimeMillis() < endTime) {
+                wait(endTime - System.currentTimeMillis());
             }
             return connected;
         }
@@ -605,9 +603,8 @@ public class GenerateLoad {
                         quorumHostPort.append(',');
                         zkHostPort.append(',');
                     }
-                    zkHostPort.append(r[0]);     // r[0] == "host:clientPort"
-                    quorumHostPort.append(r[1]); // r[1] == "host:leaderPort:leaderElectionPort"
-                    quorumHostPort.append(";"+(r[0].split(":"))[1]); // Appending ";clientPort"
+                    zkHostPort.append(r[0]);
+                    quorumHostPort.append(r[1]);
                 }
                 for (int i = 0; i < serverCount; i++) {
                     QuorumPeerInstance.startInstance(im, quorumHostPort
@@ -698,16 +695,12 @@ public class GenerateLoad {
         s.getOutputStream().write("stat".getBytes());
         BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream()));
         String line;
-        try {
-          while((line = br.readLine()) != null) {
+        while((line = br.readLine()) != null) {
             if (line.startsWith("Mode: ")) {
-              return line.substring(6);
+                return line.substring(6);
             }
-          }
-          return "unknown";
-        } finally {
-          s.close();
         }
+        return "unknown";
     }
 
     private static void doUsage() {

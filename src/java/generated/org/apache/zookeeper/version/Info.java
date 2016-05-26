@@ -23,8 +23,8 @@ package org.apache.zookeeper.version;
 public interface Info {
     public static final int MAJOR=3;
     public static final int MINOR=5;
-    public static final int MICRO=1;
+    public static final int MICRO=0;
     public static final String QUALIFIER="alpha";
     public static final int REVISION=-1;
-    public static final String BUILD_DATE="05/15/2016 18:56 GMT";
+    public static final String BUILD_DATE="05/26/2016 15:17 GMT";
 }

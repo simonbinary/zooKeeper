@@ -24,15 +24,14 @@ import static org.apache.zookeeper.server.DatadirCleanupManager.PurgeTaskStatus.
 
 import java.io.File;
 
+import junit.framework.Assert;
 
-import org.apache.zookeeper.ZKTestCase;
 import org.apache.zookeeper.test.ClientBase;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-public class DatadirCleanupManagerTest extends ZKTestCase {
+public class DatadirCleanupManagerTest {
 
     private DatadirCleanupManager purgeMgr;
     private File snapDir;

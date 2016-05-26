@@ -202,6 +202,15 @@ struct CreateRequest {
 int serialize_CreateRequest(struct oarchive *out, const char *tag, struct CreateRequest *v);
 int deserialize_CreateRequest(struct iarchive *in, const char *tag, struct CreateRequest*v);
 void deallocate_CreateRequest(struct CreateRequest*);
+struct Create2Request {
+    char * path;
+    struct buffer data;
+    struct ACL_vector acl;
+    int32_t flags;
+};
+int serialize_Create2Request(struct oarchive *out, const char *tag, struct Create2Request *v);
+int deserialize_Create2Request(struct iarchive *in, const char *tag, struct Create2Request*v);
+void deallocate_Create2Request(struct Create2Request*);
 struct DeleteRequest {
     char * path;
     int32_t version;
@@ -425,15 +434,6 @@ struct CreateTxn {
 int serialize_CreateTxn(struct oarchive *out, const char *tag, struct CreateTxn *v);
 int deserialize_CreateTxn(struct iarchive *in, const char *tag, struct CreateTxn*v);
 void deallocate_CreateTxn(struct CreateTxn*);
-struct CreateContainerTxn {
-    char * path;
-    struct buffer data;
-    struct ACL_vector acl;
-    int32_t parentCVersion;
-};
-int serialize_CreateContainerTxn(struct oarchive *out, const char *tag, struct CreateContainerTxn *v);
-int deserialize_CreateContainerTxn(struct iarchive *in, const char *tag, struct CreateContainerTxn*v);
-void deallocate_CreateContainerTxn(struct CreateContainerTxn*);
 struct DeleteTxn {
     char * path;
 };

@@ -20,12 +20,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import org.apache.zookeeper.ZKTestCase;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-public class WatchesReportTest extends ZKTestCase {
+public class WatchesReportTest {
     private Map<Long, Set<String>> m;
     private WatchesReport r;
     @Before public void setUp() {

@@ -20,8 +20,6 @@ package org.apache.zookeeper.server;
 
 
 
-import org.apache.zookeeper.common.Time;
-
 /**
  * Basic Server Statistics
  */
@@ -40,8 +38,6 @@ public class ServerStats {
         public long getLastProcessedZxid();
         public String getState();
         public int getNumAliveConnections();
-        public long getDataDirSize();
-        public long getLogDirSize();
     }
     
     public ServerStats(Provider provider) {
@@ -70,14 +66,6 @@ public class ServerStats {
     
     public long getLastProcessedZxid(){
         return provider.getLastProcessedZxid();
-    }
-
-    public long getDataDirSize() {
-        return provider.getDataDirSize();
-    }
-
-    public long getLogDirSize() {
-        return provider.getLogDirSize();
     }
     
     synchronized public long getPacketsReceived() {
@@ -119,7 +107,7 @@ public class ServerStats {
     }
     // mutators
     synchronized void updateLatency(long requestCreateTime) {
-        long latency = Time.currentElapsedTime() - requestCreateTime;
+        long latency = System.currentTimeMillis() - requestCreateTime;
         totalLatency += latency;
         count++;
         if (latency < minLatency) {

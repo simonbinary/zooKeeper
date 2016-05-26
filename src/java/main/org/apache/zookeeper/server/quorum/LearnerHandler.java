@@ -255,8 +255,11 @@ public class LearnerHandler extends ZooKeeperThread {
     }
 
     static public String packetToString(QuorumPacket p) {
-        String type;
+        if (true)
+            return null;
+        String type = null;
         String mess = null;
+        Record txn = null;
 
         switch (p.getType()) {
         case Leader.ACK:
@@ -278,7 +281,7 @@ public class LearnerHandler extends ZooKeeperThread {
             type = "PROPOSAL";
             TxnHeader hdr = new TxnHeader();
             try {
-                SerializeUtils.deserializeTxn(p.getData(), hdr);
+                txn = SerializeUtils.deserializeTxn(p.getData(), hdr);
                 // mess = "transaction: " + txn.toString();
             } catch (IOException e) {
                 LOG.warn("Unexpected exception",e);
@@ -301,30 +304,6 @@ public class LearnerHandler extends ZooKeeperThread {
             break;
         case Leader.UPTODATE:
             type = "UPTODATE";
-            break;
-        case Leader.DIFF:
-            type = "DIFF";
-            break;
-        case Leader.TRUNC:
-            type = "TRUNC";
-            break;
-        case Leader.SNAP:
-            type = "SNAP";
-            break;
-        case Leader.ACKEPOCH:
-            type = "ACKEPOCH";
-            break;
-        case Leader.SYNC:
-            type = "SYNC";
-            break;
-        case Leader.INFORM:
-            type = "INFORM";
-            break;
-        case Leader.COMMITANDACTIVATE:
-            type = "COMMITANDACTIVATE";
-            break;
-        case Leader.INFORMANDACTIVATE:
-            type = "INFORMANDACTIVATE";
             break;
         default:
             type = "UNKNOWN" + p.getType();
@@ -409,6 +388,14 @@ public class LearnerHandler extends ZooKeeperThread {
                 QuorumPacket newEpochPacket = new QuorumPacket(Leader.LEADERINFO, newLeaderZxid, ver, null);
                 oa.writeRecord(newEpochPacket, "packet");
                 bufferedOutput.flush();
+
+                try{
+                    Thread.sleep(5 * 1000);
+                }catch(Exception e){
+                    e.printStackTrace();
+                }
+
+
                 QuorumPacket ackEpochPacket = new QuorumPacket();
                 ia.readRecord(ackEpochPacket, "packet");
                 if (ackEpochPacket.getType() != Leader.ACKEPOCH) {
@@ -480,8 +467,7 @@ public class LearnerHandler extends ZooKeeperThread {
             qp = new QuorumPacket();
             ia.readRecord(qp, "packet");
             if(qp.getType() != Leader.ACK){
-                LOG.error("Next packet was supposed to be an ACK,"
-                    + " but received packet: {}", packetToString(qp));
+                LOG.error("Next packet was supposed to be an ACK");
                 return;
             }
 
@@ -595,8 +581,6 @@ public class LearnerHandler extends ZooKeeperThread {
                     leader.zk.submitLearnerRequest(si);
                     break;
                 default:
-                    LOG.warn("unexpected quorum packet, type: {}", packetToString(qp));
-                    break;
                 }
             }
         } catch (IOException e) {
@@ -701,6 +685,12 @@ public class LearnerHandler extends ZooKeeperThread {
                  */
                 minCommittedLog = lastProcessedZxid;
                 maxCommittedLog = lastProcessedZxid;
+            }
+
+            try{
+                Thread.sleep(5 * 1000);
+            }catch(Exception e){
+                e.printStackTrace();
             }
 
             /*

@@ -40,9 +40,8 @@ import java.util.concurrent.TimeoutException;
 import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
 
+import junit.framework.TestCase;
 
-import org.apache.zookeeper.common.Time;
-import org.apache.zookeeper.common.X509Exception.SSLContextException;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.PortAssignment;
 import org.apache.zookeeper.TestableZooKeeper;
@@ -122,11 +121,11 @@ public abstract class ClientBase extends ZKTestCase {
         synchronized public void waitForConnected(long timeout)
             throws InterruptedException, TimeoutException
         {
-            long expire = Time.currentElapsedTime() + timeout;
+            long expire = System.currentTimeMillis() + timeout;
             long left = timeout;
             while(!connected && left > 0) {
                 wait(left);
-                left = expire - Time.currentElapsedTime();
+                left = expire - System.currentTimeMillis();
             }
             if (!connected) {
                 throw new TimeoutException("Did not connect");
@@ -136,11 +135,11 @@ public abstract class ClientBase extends ZKTestCase {
         synchronized public void waitForDisconnected(long timeout)
             throws InterruptedException, TimeoutException
         {
-            long expire = Time.currentElapsedTime() + timeout;
+            long expire = System.currentTimeMillis() + timeout;
             long left = timeout;
             while(connected && left > 0) {
                 wait(left);
-                left = expire - Time.currentElapsedTime();
+                left = expire - System.currentTimeMillis();
             }
             if (connected) {
                 throw new TimeoutException("Did not disconnect");
@@ -229,28 +228,22 @@ public abstract class ClientBase extends ZKTestCase {
     }
 
     public static boolean waitForServerUp(String hp, long timeout) {
-        return waitForServerUp(hp, timeout, false);
-    }
-
-    public static boolean waitForServerUp(String hp, long timeout, boolean secure) {
-        long start = Time.currentElapsedTime();
+        long start = System.currentTimeMillis();
         while (true) {
             try {
                 // if there are multiple hostports, just take the first one
                 HostPort hpobj = parseHostPortList(hp).get(0);
-                String result = send4LetterWord(hpobj.host, hpobj.port, "stat", secure);
+                String result = send4LetterWord(hpobj.host, hpobj.port, "stat");
                 if (result.startsWith("Zookeeper version:") &&
                         !result.contains("READ-ONLY")) {
                     return true;
                 }
             } catch (IOException e) {
                 // ignore as this is expected
-                LOG.info("server {} not up", hp, e);
-            } catch (SSLContextException e) {
-                LOG.error("server {} not up", hp, e);
+                LOG.info("server " + hp + " not up " + e);
             }
 
-            if (Time.currentElapsedTime() > start + timeout) {
+            if (System.currentTimeMillis() > start + timeout) {
                 break;
             }
             try {
@@ -261,24 +254,17 @@ public abstract class ClientBase extends ZKTestCase {
         }
         return false;
     }
-
     public static boolean waitForServerDown(String hp, long timeout) {
-        return waitForServerDown(hp, timeout, false);
-    }
-
-    public static boolean waitForServerDown(String hp, long timeout, boolean secure) {
-        long start = Time.currentElapsedTime();
+        long start = System.currentTimeMillis();
         while (true) {
             try {
                 HostPort hpobj = parseHostPortList(hp).get(0);
-                send4LetterWord(hpobj.host, hpobj.port, "stat", secure);
+                send4LetterWord(hpobj.host, hpobj.port, "stat");
             } catch (IOException e) {
-                return true;
-            } catch (SSLContextException e) {
                 return true;
             }
 
-            if (Time.currentElapsedTime() > start + timeout) {
+            if (System.currentTimeMillis() > start + timeout) {
                 break;
             }
             try {
@@ -292,7 +278,7 @@ public abstract class ClientBase extends ZKTestCase {
 
     public static boolean waitForServerState(QuorumPeer qp, int timeout,
             String serverState) {
-        long start = Time.currentElapsedTime();
+        long start = System.currentTimeMillis();
         while (true) {
             try {
                 Thread.sleep(250);
@@ -301,7 +287,7 @@ public abstract class ClientBase extends ZKTestCase {
             }
             if (qp.getServerState().equals(serverState))
                 return true;
-            if (Time.currentElapsedTime() > start + timeout) {
+            if (System.currentTimeMillis() > start + timeout) {
                 return false;
             }
         }
@@ -323,7 +309,6 @@ public abstract class ClientBase extends ZKTestCase {
     public static File createTmpDir() throws IOException {
         return createTmpDir(BASETEST);
     }
-
     static File createTmpDir(File parentDir) throws IOException {
         File tmpFile = File.createTempFile("test", ".junit", parentDir);
         // don't delete tmpFile - this ensures we don't attempt to create
@@ -334,7 +319,6 @@ public abstract class ClientBase extends ZKTestCase {
 
         return tmpDir;
     }
-
     private static int getPort(String hostPort) {
         String[] split = hostPort.split(":");
         String portstr = split[split.length-1];
@@ -356,7 +340,7 @@ public abstract class ClientBase extends ZKTestCase {
         ZooKeeperServer zks = new ZooKeeperServer(dataDir, dataDir, 3000);
         factory.startup(zks);
         Assert.assertTrue("waiting for server up", ClientBase.waitForServerUp(
-                "127.0.0.1:" + port, CONNECTION_TIMEOUT, factory.isSecure()));
+                "127.0.0.1:" + port, CONNECTION_TIMEOUT));
     }
 
     /**
@@ -407,8 +391,7 @@ public abstract class ClientBase extends ZKTestCase {
 
             Assert.assertTrue("waiting for server down",
                        ClientBase.waitForServerDown("127.0.0.1:" + PORT,
-                                                    CONNECTION_TIMEOUT,
-                                                    factory.isSecure()));
+                                                    CONNECTION_TIMEOUT));
         }
     }
 
@@ -489,7 +472,7 @@ public abstract class ClientBase extends ZKTestCase {
         for (ObjectName bean : children) {
             LOG.info("unexpected:" + bean.toString());
         }
-        Assert.assertEquals("Unexpected bean exists!", 0, children.size());
+        TestCase.assertEquals("Unexpected bean exists!", 0, children.size());
     }
 
     /**

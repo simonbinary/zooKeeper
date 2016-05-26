@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import org.apache.zookeeper.jmx.MBeanRegistry;
+import org.apache.zookeeper.KeeperException.SessionExpiredException;
 import org.apache.zookeeper.server.DataTreeBean;
 import org.apache.zookeeper.server.quorum.LearnerSessionTracker;
 import org.apache.zookeeper.server.ServerCnxn;
@@ -83,8 +84,7 @@ public abstract class LearnerZooKeeperServer extends QuorumZooKeeperServer {
     public void createSessionTracker() {
         sessionTracker = new LearnerSessionTracker(
                 this, getZKDatabase().getSessionWithTimeOuts(),
-                this.tickTime, self.getId(), self.areLocalSessionsEnabled(),
-                getZooKeeperServerListener());
+                this.tickTime, self.getId(), self.areLocalSessionsEnabled());
     }
 
     @Override
@@ -157,11 +157,7 @@ public abstract class LearnerZooKeeperServer extends QuorumZooKeeperServer {
     }
 
     @Override
-    public synchronized void shutdown() {
-        if (!isRunning()) {
-            LOG.debug("ZooKeeper server is not running, so not proceeding to shutdown!");
-            return;
-        }
+    public void shutdown() {
         LOG.info("Shutting down");
         try {
             super.shutdown();

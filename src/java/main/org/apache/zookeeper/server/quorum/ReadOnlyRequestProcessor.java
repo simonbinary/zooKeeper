@@ -52,10 +52,8 @@ public class ReadOnlyRequestProcessor extends ZooKeeperCriticalThread implements
 
     private final ZooKeeperServer zks;
 
-    public ReadOnlyRequestProcessor(ZooKeeperServer zks,
-            RequestProcessor nextProcessor) {
-        super("ReadOnlyRequestProcessor:" + zks.getServerId(), zks
-                .getZooKeeperServerListener());
+    public ReadOnlyRequestProcessor(ZooKeeperServer zks, RequestProcessor nextProcessor) {
+        super("ReadOnlyRequestProcessor:" + zks.getServerId());
         this.zks = zks;
         this.nextProcessor = nextProcessor;
     }
@@ -82,9 +80,7 @@ public class ReadOnlyRequestProcessor extends ZooKeeperCriticalThread implements
                 case OpCode.sync:
                 case OpCode.create:
                 case OpCode.create2:
-                case OpCode.createContainer:
                 case OpCode.delete:
-                case OpCode.deleteContainer:
                 case OpCode.setData:
                 case OpCode.reconfig:
                 case OpCode.setACL:
@@ -105,13 +101,15 @@ public class ReadOnlyRequestProcessor extends ZooKeeperCriticalThread implements
                     nextProcessor.processRequest(request);
                 }
             }
+        } catch (InterruptedException e) {
+            LOG.error("Unexpected interruption", e);
         } catch (RequestProcessorException e) {
             if (e.getCause() instanceof XidRolloverException) {
                 LOG.info(e.getCause().getMessage());
             }
-            handleException(this.getName(), e);
+            LOG.error("Unexpected exception", e);
         } catch (Exception e) {
-            handleException(this.getName(), e);
+            LOG.error("Unexpected exception", e);
         }
         LOG.info("ReadOnlyRequestProcessor exited loop!");
     }

@@ -32,32 +32,11 @@ fi
 
 if [ "x$JMXDISABLE" = "x" ]
 then
-  echo "ZooKeeper JMX enabled by default" >&2
-  if [ "x$JMXPORT" = "x" ]
-  then
+    echo "JMX enabled by default" >&2
     # for some reason these two options are necessary on jdk6 on Ubuntu
     #   accord to the docs they are not necessary, but otw jconsole cannot
     #   do a local attach
     ZOOMAIN="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.local.only=$JMXLOCALONLY org.apache.zookeeper.server.quorum.QuorumPeerMain"
-  else
-    if [ "x$JMXAUTH" = "x" ]
-    then
-      JMXAUTH=false
-    fi
-    if [ "x$JMXSSL" = "x" ]
-    then
-      JMXSSL=false
-    fi
-    if [ "x$JMXLOG4J" = "x" ]
-    then
-      JMXLOG4J=true
-    fi
-    echo "ZooKeeper remote JMX Port set to $JMXPORT" >&2
-    echo "ZooKeeper remote JMX authenticate set to $JMXAUTH" >&2
-    echo "ZooKeeper remote JMX ssl set to $JMXSSL" >&2
-    echo "ZooKeeper remote JMX log4j set to $JMXLOG4J" >&2
-    ZOOMAIN="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=$JMXPORT -Dcom.sun.management.jmxremote.authenticate=$JMXAUTH -Dcom.sun.management.jmxremote.ssl=$JMXSSL -Dzookeeper.jmx.log4j.disable=$JMXLOG4J org.apache.zookeeper.server.quorum.QuorumPeerMain"
-  fi
 else
     echo "JMX disabled by user request" >&2
     ZOOMAIN="org.apache.zookeeper.server.quorum.QuorumPeerMain"
@@ -133,8 +112,7 @@ if [ ! -w "$ZOO_LOG_DIR" ] ; then
 mkdir -p "$ZOO_LOG_DIR"
 fi
 
-ZOO_LOG_FILE=zookeeper-$USER-server-$HOSTNAME.log
-_ZOO_DAEMON_OUT="$ZOO_LOG_DIR/zookeeper-$USER-server-$HOSTNAME.out"
+_ZOO_DAEMON_OUT="$ZOO_LOG_DIR/zookeeper.out"
 
 case $1 in
 start)
@@ -146,21 +124,14 @@ start)
       fi
     fi
     nohup "$JAVA" $ZOO_DATADIR_AUTOCREATE "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" \
-    "-Dzookeeper.log.file=${ZOO_LOG_FILE}" "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
-    -XX:+HeapDumpOnOutOfMemoryError -XX:OnOutOfMemoryError='kill -9 %p' \
-    -cp "$CLASSPATH" $JVMFLAGS $ZOOMAIN "$ZOOCFG" > "$_ZOO_DAEMON_OUT" 2>&1 1> /dev/null &
+    "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
+    -cp "$CLASSPATH" $JVMFLAGS $ZOOMAIN "$ZOOCFG" > "$_ZOO_DAEMON_OUT" 2>&1 < /dev/null &
     if [ $? -eq 0 ]
     then
       if /bin/echo -n $! > "$ZOOPIDFILE"
       then
         sleep 1
-        pid=$(cat "${ZOOPIDFILE}")
-        if ps -p "${pid}" > /dev/null 2>&1; then
-          echo STARTED
-        else
-          echo FAILED TO START
-          exit 1
-        fi
+        echo STARTED
       else
         echo FAILED TO WRITE PID
         exit 1
@@ -176,15 +147,11 @@ start-foreground)
       ZOO_CMD=("$JAVA")
     fi
     "${ZOO_CMD[@]}" $ZOO_DATADIR_AUTOCREATE "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" \
-    "-Dzookeeper.log.file=${ZOO_LOG_FILE}" "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
-    -XX:+HeapDumpOnOutOfMemoryError -XX:OnOutOfMemoryError='kill -9 %p' \
+    "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
     -cp "$CLASSPATH" $JVMFLAGS $ZOOMAIN "$ZOOCFG"
     ;;
 print-cmd)
-    echo "\"$JAVA\" $ZOO_DATADIR_AUTOCREATE -Dzookeeper.log.dir=\"${ZOO_LOG_DIR}\" \
-    -Dzookeeper.log.file=\"${ZOO_LOG_FILE}\" -Dzookeeper.root.logger=\"${ZOO_LOG4J_PROP}\" \
-    -XX:+HeapDumpOnOutOfMemoryError -XX:OnOutOfMemoryError='kill -9 %p' \
-    -cp \"$CLASSPATH\" $JVMFLAGS $ZOOMAIN \"$ZOOCFG\" > \"$_ZOO_DAEMON_OUT\" 2>&1 < /dev/null"
+    echo "\"$JAVA\" $ZOO_DATADIR_AUTOCREATE -Dzookeeper.log.dir=\"${ZOO_LOG_DIR}\" -Dzookeeper.root.logger=\"${ZOO_LOG4J_PROP}\" -cp \"$CLASSPATH\" $JVMFLAGS $ZOOMAIN \"$ZOOCFG\" > \"$_ZOO_DAEMON_OUT\" 2>&1 < /dev/null"
     ;;
 stop)
     echo -n "Stopping zookeeper ... "
@@ -192,7 +159,7 @@ stop)
     then
       echo "no zookeeper to stop (could not find file $ZOOPIDFILE)"
     else
-      $KILL $(cat "$ZOOPIDFILE")
+      $KILL -9 $(cat "$ZOOPIDFILE")
       rm "$ZOOPIDFILE"
       echo STOPPED
     fi
@@ -212,35 +179,20 @@ status)
 	clientPortAddress="localhost"
     fi
     clientPort=`grep "^[[:space:]]*clientPort[^[:alpha:]]" "$ZOOCFG" | sed -e 's/.*=//'`
-    if ! [[ "$clientPort"  =~ ^[0-9]+$ ]]
+    if ! [ $clientPort ]
     then
+       echo "Client port not found in static config file. Looking in dynamic config file."
        dataDir=`grep "^[[:space:]]*dataDir" "$ZOOCFG" | sed -e 's/.*=//'`
        myid=`cat "$dataDir/myid"`
-       if ! [[ "$myid" =~ ^[0-9]+$ ]] ; then
-         echo "clientPort not found and myid could not be determined. Terminating."
-         exit 1
-       fi
-       clientPortAndAddress=`grep "^[[:space:]]*server.$myid=.*;.*" "$ZOOCFG" | sed -e 's/.*=//' | sed -e 's/.*;//'`
-       if [ ! "$clientPortAndAddress" ] ; then
-           echo "Client port not found in static config file. Looking in dynamic config file."
-           dynamicConfigFile=`grep "^[[:space:]]*dynamicConfigFile" "$ZOOCFG" | sed -e 's/.*=//'`
-           clientPortAndAddress=`grep "^[[:space:]]*server.$myid=.*;.*" "$dynamicConfigFile" | sed -e 's/.*=//' | sed -e 's/.*;//'`
-       fi
-       if [ ! "$clientPortAndAddress" ] ; then
-          echo "Client port not found. Terminating."
-          exit 1
-       fi
-       if [[ "$clientPortAndAddress" =~ ^.*:[0-9]+ ]] ; then
-          clientPortAddress=`echo "$clientPortAndAddress" | sed -e 's/:.*//'`
-       fi
-       clientPort=`echo "$clientPortAndAddress" | sed -e 's/.*://'`
-       if [ ! "$clientPort" ] ; then
+       dynamicConfigFile=`grep "^[[:space:]]*dynamicConfigFile" "$ZOOCFG" | sed -e 's/.*=//'`
+       clientPort=`grep "^[[:space:]]*server.$myid" "$dynamicConfigFile" | sed -e 's/.*=//' | sed -e 's/.*;//' | sed -e 's/.*://'`
+       if ! [[ "$clientPort" =~ ^[0-9]+$ ]] ; then
           echo "Client port not found. Terminating."
           exit 1
        fi
     fi
-    echo "Client port found: $clientPort. Client address: $clientPortAddress."
-    STAT=`"$JAVA" "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" "-Dzookeeper.log.file=${ZOO_LOG_FILE}" \
+    echo "Client port found: $clientPort"
+    STAT=`"$JAVA" "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
              -cp "$CLASSPATH" $JVMFLAGS org.apache.zookeeper.client.FourLetterWordMain \
              $clientPortAddress $clientPort srvr 2> /dev/null    \
           | grep Mode`
@@ -254,6 +206,6 @@ status)
     fi
     ;;
 *)
-    echo "Usage: $0 [--config <conf-dir>] {start|start-foreground|stop|restart|status|print-cmd}" >&2
+    echo "Usage: $0 [--config <conf-dir>] {start|start-foreground|stop|restart|status|upgrade|print-cmd}" >&2
 
 esac

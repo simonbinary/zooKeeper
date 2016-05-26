@@ -27,7 +27,7 @@ import java.io.InputStream;
  *
  */
 public class BinaryInputArchive implements InputArchive {
-    static public final String UNREASONBLE_LENGTH= "Unreasonable length = ";
+    
     private DataInput in;
     
     static public BinaryInputArchive getArchive(InputStream strm) {
@@ -78,7 +78,6 @@ public class BinaryInputArchive implements InputArchive {
     public String readString(String tag) throws IOException {
     	int len = in.readInt();
     	if (len == -1) return null;
-        checkLength(len);
     	byte b[] = new byte[len];
     	in.readFully(b);
     	return new String(b, "UTF8");
@@ -89,7 +88,12 @@ public class BinaryInputArchive implements InputArchive {
     public byte[] readBuffer(String tag) throws IOException {
         int len = readInt(tag);
         if (len == -1) return null;
-        checkLength(len);
+        // Since this is a rough sanity check, add some padding to maxBuffer to
+        // make up for extra fields, etc. (otherwise e.g. clients may be able to
+        // write buffers larger than we can read from disk!)
+        if (len < 0 || len > maxBuffer + 1024) {
+            throw new IOException("Unreasonable length = " + len);
+        }
         byte[] arr = new byte[len];
         in.readFully(arr);
         return arr;
@@ -118,13 +122,5 @@ public class BinaryInputArchive implements InputArchive {
     }
     
     public void endMap(String tag) throws IOException {}
-
-    // Since this is a rough sanity check, add some padding to maxBuffer to
-    // make up for extra fields, etc. (otherwise e.g. clients may be able to
-    // write buffers larger than we can read from disk!)
-    private void checkLength(int len) throws IOException {
-        if (len < 0 || len > maxBuffer + 1024) {
-            throw new IOException(UNREASONBLE_LENGTH + len);
-        }
-    }
+    
 }

@@ -26,7 +26,6 @@ import javax.ws.rs.core.MediaType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.zookeeper.server.jersey.jaxb.ZStat;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -98,6 +97,8 @@ public class GetTest extends Base {
 
     @Test
     public void testGet() throws Exception {
+        LOG.info("STARTING " + getName());
+
         if (expectedStat != null) {
             if (expectedStat.data64 != null || expectedStat.dataUtf8 == null) {
                 zk.setData(expectedStat.path, expectedStat.data64, -1);
@@ -109,14 +110,14 @@ public class GetTest extends Base {
 
         ClientResponse cr = znodesr.path(path).queryParam("dataformat", encoding)
             .accept(accept).get(ClientResponse.class);
-        Assert.assertEquals(expectedStatus, cr.getClientResponseStatus());
+        assertEquals(expectedStatus, cr.getClientResponseStatus());
 
         if (expectedStat == null) {
             return;
         }
 
         ZStat zstat = cr.getEntity(ZStat.class);
-        Assert.assertEquals(expectedStat, zstat);
-        Assert.assertEquals(znodesr.path(path).toString(), zstat.uri);
+        assertEquals(expectedStat, zstat);
+        assertEquals(znodesr.path(path).toString(), zstat.uri);
     }
 }

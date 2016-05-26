@@ -30,9 +30,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooKeeper.States;
 import org.apache.zookeeper.data.Stat;
-import org.junit.Assert;
 import org.junit.Test;
-import org.apache.zookeeper.common.Time;
 
 /**
  * This does a basic system test. It starts up an ensemble of servers and a set of clients.
@@ -48,8 +46,8 @@ public class SimpleSysTest extends BaseSysTest implements Watcher {
     
     synchronized private boolean waitForConnect(ZooKeeper zk, long timeout) throws InterruptedException {
         connected = (zk.getState() == States.CONNECTED);
-        long end = Time.currentElapsedTime() + timeout;
-        while(!connected && end > Time.currentElapsedTime()) {
+        long end = System.currentTimeMillis() + timeout;
+        while(!connected && end > System.currentTimeMillis()) {
             wait(timeout);
             connected = (zk.getState() == States.CONNECTED);
         }
@@ -83,10 +81,10 @@ public class SimpleSysTest extends BaseSysTest implements Watcher {
             for(int j = 0; j < maxTries; j++) {
                 try {
                     byte b[] = zk.getData("/simpleCase/" + i, false, stat);
-                    Assert.assertEquals("orig", new String(b));
+                    assertEquals("orig", new String(b));
                 } catch(NoNodeException e) {
                     if (j+1 == maxTries) {
-                        Assert.fail("Max tries exceeded on client " + i);
+                        fail("Max tries exceeded on client " + i);
                     }
                     Thread.sleep(1000);
                 }
@@ -100,11 +98,11 @@ public class SimpleSysTest extends BaseSysTest implements Watcher {
             if (i+1 > getServerCount()/2) {
                 startServer(i);
             } else if (i+1 == getServerCount()/2) {
-                Assert.assertTrue("Connection didn't recover", waitForConnect(zk, 10000));
+                assertTrue("Connection didn't recover", waitForConnect(zk, 10000));
                 try {
                     zk.setData("/simpleCase", "new".getBytes(), -1);
                 } catch(ConnectionLossException e) {
-                    Assert.assertTrue("Connection didn't recover", waitForConnect(zk, 10000));
+                    assertTrue("Connection didn't recover", waitForConnect(zk, 10000));
                     zk.setData("/simpleCase", "new".getBytes(), -1);
                 }
                 for(int j = 0; j < i; j++) {
@@ -114,11 +112,11 @@ public class SimpleSysTest extends BaseSysTest implements Watcher {
             }
         }
         Thread.sleep(100); // wait for things to stabilize
-        Assert.assertTrue("Servers didn't bounce", waitForConnect(zk, 15000));
+        assertTrue("Servers didn't bounce", waitForConnect(zk, 15000));
         try {
             zk.getData("/simpleCase", false, stat);
         } catch(ConnectionLossException e) {
-            Assert.assertTrue("Servers didn't bounce", waitForConnect(zk, 15000));
+            assertTrue("Servers didn't bounce", waitForConnect(zk, 15000));
         }
         
         // check that the change has propagated to everyone
@@ -129,7 +127,7 @@ public class SimpleSysTest extends BaseSysTest implements Watcher {
                     break;
                 }
                 if (j+1 == maxTries) {
-                    Assert.fail("max tries exceeded for " + i);
+                    fail("max tries exceeded for " + i);
                 }
                 Thread.sleep(1000);
             }
@@ -144,7 +142,7 @@ public class SimpleSysTest extends BaseSysTest implements Watcher {
                 for(int j = 0; j < maxTries; j++) {
                     zk.getData("/simpleCase/" + i, false, stat);
                     if (j+1 == maxTries) {
-                        Assert.fail("max tries exceeded waiting for child " + i + " to die");
+                        fail("max tries exceeded waiting for child " + i + " to die");
                     }
                     Thread.sleep(200);
                 }

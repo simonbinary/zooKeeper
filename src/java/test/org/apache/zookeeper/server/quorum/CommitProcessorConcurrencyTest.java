@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.apache.jute.BinaryOutputArchive;
-import org.apache.zookeeper.ZKTestCase;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.data.Id;
@@ -34,7 +33,6 @@ import org.apache.zookeeper.server.Request;
 import org.apache.zookeeper.server.RequestProcessor;
 import org.apache.zookeeper.server.WorkerService;
 import org.apache.zookeeper.server.RequestProcessor.RequestProcessorException;
-import org.apache.zookeeper.server.ZooKeeperServerListener;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -42,7 +40,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CommitProcessorConcurrencyTest extends ZKTestCase {
+public class CommitProcessorConcurrencyTest {
     protected static final Logger LOG =
             LoggerFactory.getLogger(CommitProcessorConcurrencyTest.class);
 
@@ -71,12 +69,7 @@ public class CommitProcessorConcurrencyTest extends ZKTestCase {
                       public void shutdown(){}
           },
           "0",
-          false, new ZooKeeperServerListener(){
-
-              @Override
-              public void notifyStopping(String errMsg, int exitCode) {
-
-              }});
+          false);
         }
 
         public void testStart() {

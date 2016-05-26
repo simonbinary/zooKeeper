@@ -38,7 +38,6 @@ import org.apache.zookeeper.KeeperException.NoNodeException;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.data.Stat;
-import org.apache.zookeeper.common.Time;
 
 /**
  * This class doles out assignments to InstanceContainers that are registered to
@@ -295,9 +294,9 @@ public class InstanceManager implements AsyncCallback.ChildrenCallback, Watcher 
     public String getStatus(String name, long timeout) throws KeeperException, InterruptedException {
         Stat stat = new Stat();
         byte data[] = null;
-        long endTime = Time.currentElapsedTime() + timeout;
+        long endTime = System.currentTimeMillis() + timeout;
         KeeperException lastException = null;
-        for(int i = 0; i < maxTries && endTime > Time.currentElapsedTime(); i++) {
+        for(int i = 0; i < maxTries && endTime > System.currentTimeMillis(); i++) {
             try {
                 data = zk.getData(reportsNode + '/' + name, false, stat);
                 if (LOG.isDebugEnabled()) {
@@ -318,7 +317,7 @@ public class InstanceManager implements AsyncCallback.ChildrenCallback, Watcher 
                             }
                         }});
                     if (eStat == null) {
-                        eventObj.wait(endTime - Time.currentElapsedTime());
+                        eventObj.wait(endTime - System.currentTimeMillis());
                     }
                 }
                 lastException = e;

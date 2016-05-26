@@ -18,10 +18,9 @@
 
 package org.apache.zookeeper.common;
 
-import org.apache.zookeeper.ZKTestCase;
 import org.junit.Test;
 
-public class PathUtilsTest extends ZKTestCase {
+public class PathUtilsTest {
 
     @Test
     public void testValidatePath_ValidPath() {

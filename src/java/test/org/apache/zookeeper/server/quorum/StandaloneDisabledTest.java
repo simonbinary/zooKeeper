@@ -27,8 +27,12 @@ import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.PortAssignment;
 import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.TestableZooKeeper;
 import org.apache.zookeeper.test.ClientBase;
 import org.apache.zookeeper.test.ReconfigTest;
+import org.apache.zookeeper.AsyncCallback.StatCallback;
+import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -66,7 +70,7 @@ public class StandaloneDisabledTest extends QuorumPeerTestBase {
         LOG.info("Configuration after adding 2 followers:\n"
                  + new String(zkHandles[leaderId].getConfig(this, new Stat())));
 
-        //shutdown leader- quorum should still exist
+	//shutdown leader- quorum should still exist
         shutDownServer(leaderId);
         ReconfigTest.testNormalOperation(zkHandles[follower1], zkHandles[follower2]);
 
@@ -87,18 +91,6 @@ public class StandaloneDisabledTest extends QuorumPeerTestBase {
         testReconfig(follower2, false, reconfigServers);
         LOG.info("Configuration after removing leader and follower 1:\n"
                 + new String(zkHandles[follower2].getConfig(this, new Stat())));
-
-        // Try to remove follower2, which is the only remaining server. This should fail.
-        reconfigServers.clear();
-        reconfigServers.add(Integer.toString(follower2));
-        try {
-            zkHandles[follower2].reconfig(null, reconfigServers, null, -1, new Stat());
-            Assert.fail("reconfig completed successfully even though there is no quorum up in new config!");
-        } catch (KeeperException.BadArgumentsException e) {
-            // This is expected.
-        } catch (Exception e) {
-            Assert.fail("Should have been BadArgumentsException!");
-        }
 
         //Add two participants and change them to observers to check
         //that we can reconfigure down to one participant with observers.
@@ -227,12 +219,11 @@ public class StandaloneDisabledTest extends QuorumPeerTestBase {
                 int id2 = Integer.parseInt(server.substring(7, 8)); //server.#
                 ReconfigTest.testNormalOperation(zkHandles[id], zkHandles[id2]);
             }
-            ReconfigTest.testServerHasConfig(zkHandles[id], servers, null);
         } else {
             ReconfigTest.reconfig(zkHandles[id], null, servers, null, -1);
-            ReconfigTest.testServerHasConfig(zkHandles[id], null, servers);
         }
 
+        ReconfigTest.testServerHasConfig(zkHandles[id], servers, null);
     }
 
    /**

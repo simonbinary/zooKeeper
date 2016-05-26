@@ -26,7 +26,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.zookeeper.common.Time;
 import org.apache.jute.BinaryInputArchive;
 import org.apache.jute.BinaryOutputArchive;
 import org.apache.jute.Record;
@@ -237,7 +236,7 @@ public class LoadFromLogTest extends ZKTestCase implements  Watcher {
         dt.createNode("/test", new byte[0], null, 0, -1, 1, 1);
         for (count = 1; count <= 3; count++) {
             dt.createNode("/test/" + count, new byte[0], null, 0, -1, count,
-                    Time.currentElapsedTime());
+                    System.currentTimeMillis());
         }
         DataNode zk = dt.getNode("/test");
 
@@ -286,15 +285,15 @@ public class LoadFromLogTest extends ZKTestCase implements  Watcher {
         if (type == OpCode.delete) {
             txn = new DeleteTxn(path);
             txnHeader = new TxnHeader(0xabcd, 0x123, prevPzxid + 1,
-                Time.currentElapsedTime(), OpCode.delete);
+                System.currentTimeMillis(), OpCode.delete);
         } else if (type == OpCode.create) {
             txnHeader = new TxnHeader(0xabcd, 0x123, prevPzxid + 1,
-                    Time.currentElapsedTime(), OpCode.create);
+                    System.currentTimeMillis(), OpCode.create);
             txn = new CreateTxn(path, new byte[0], null, false, cversion);
         }
         else if (type == OpCode.multi) {
             txnHeader = new TxnHeader(0xabcd, 0x123, prevPzxid + 1,
-                    Time.currentElapsedTime(), OpCode.create);
+                    System.currentTimeMillis(), OpCode.create);
             txn = new CreateTxn(path, new byte[0], null, false, cversion);
             ArrayList txnList = new ArrayList();
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -305,7 +304,7 @@ public class LoadFromLogTest extends ZKTestCase implements  Watcher {
             txnList.add(txact);
             txn = new MultiTxn(txnList);
             txnHeader = new TxnHeader(0xabcd, 0x123, prevPzxid + 1,
-                    Time.currentElapsedTime(), OpCode.multi);
+                    System.currentTimeMillis(), OpCode.multi);
         }
         logFile.processTransaction(txnHeader, dt, null, txn);
 
@@ -332,7 +331,7 @@ public class LoadFromLogTest extends ZKTestCase implements  Watcher {
         File tmpDir = ClientBase.createTmpDir();
         FileTxnLog txnLog = new FileTxnLog(tmpDir);
         TxnHeader txnHeader = new TxnHeader(0xabcd, 0x123, 0x123,
-              Time.currentElapsedTime(), OpCode.create);
+              System.currentTimeMillis(), OpCode.create);
         Record txn = new CreateTxn("/Test", new byte[0], null, false, 1);
         txnLog.append(txnHeader, txn);
         FileInputStream in = new FileInputStream(tmpDir.getPath() + "/log." +
@@ -569,9 +568,9 @@ public class LoadFromLogTest extends ZKTestCase implements  Watcher {
     private ZooKeeper getConnectedZkClient() throws IOException {
         ZooKeeper zk = new ZooKeeper(HOSTPORT, CONNECTION_TIMEOUT, this);
 
-        long start = Time.currentElapsedTime();
+        long start = System.currentTimeMillis();
         while (!connected) {
-            long end = Time.currentElapsedTime();
+            long end = System.currentTimeMillis();
             if (end - start > 5000) {
                 Assert.assertTrue("Could not connect with server in 5 seconds",
                         false);

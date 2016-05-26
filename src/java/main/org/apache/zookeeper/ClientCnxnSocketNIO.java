@@ -26,10 +26,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingDeque;
 
 import org.apache.zookeeper.ClientCnxn.EndOfStreamException;
 import org.apache.zookeeper.ClientCnxn.Packet;
@@ -63,7 +63,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
      * @throws InterruptedException
      * @throws IOException
      */
-    void doIO(List<Packet> pendingQueue, ClientCnxn cnxn)
+    void doIO(List<Packet> pendingQueue, LinkedList<Packet> outgoingQueue, ClientCnxn cnxn)
       throws InterruptedException, IOException {
         SocketChannel sock = (SocketChannel) sockKey.channel();
         if (sock == null) {
@@ -86,7 +86,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     readConnectResult();
                     enableRead();
                     if (findSendablePacket(outgoingQueue,
-                            sendThread.tunnelAuthInProgress()) != null) {
+                            cnxn.sendThread.clientTunneledAuthenticationInProgress()) != null) {
                         // Since SASL authentication has completed (if client is configured to do so),
                         // outgoing packets waiting in the outgoingQueue can now be sent.
                         enableWrite();
@@ -104,87 +104,96 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
             }
         }
         if (sockKey.isWritable()) {
-            Packet p = findSendablePacket(outgoingQueue,
-                    sendThread.tunnelAuthInProgress());
+            synchronized(outgoingQueue) {
+                Packet p = findSendablePacket(outgoingQueue,
+                        cnxn.sendThread.clientTunneledAuthenticationInProgress());
 
-            if (p != null) {
-                updateLastSend();
-                // If we already started writing p, p.bb will already exist
-                if (p.bb == null) {
-                    if ((p.requestHeader != null) &&
-                            (p.requestHeader.getType() != OpCode.ping) &&
-                            (p.requestHeader.getType() != OpCode.auth)) {
-                        p.requestHeader.setXid(cnxn.getXid());
+                if (p != null) {
+                    updateLastSend();
+                    // If we already started writing p, p.bb will already exist
+                    if (p.bb == null) {
+                        if ((p.requestHeader != null) &&
+                                (p.requestHeader.getType() != OpCode.ping) &&
+                                (p.requestHeader.getType() != OpCode.auth)) {
+                            p.requestHeader.setXid(cnxn.getXid());
+                        }
+                        p.createBB();
                     }
-                    p.createBB();
-                }
-                sock.write(p.bb);
-                if (!p.bb.hasRemaining()) {
-                    sentCount++;
-                    outgoingQueue.removeFirstOccurrence(p);
-                    if (p.requestHeader != null
-                            && p.requestHeader.getType() != OpCode.ping
-                            && p.requestHeader.getType() != OpCode.auth) {
-                        synchronized (pendingQueue) {
-                            pendingQueue.add(p);
+                    sock.write(p.bb);
+                    if (!p.bb.hasRemaining()) {
+                        sentCount++;
+                        outgoingQueue.removeFirstOccurrence(p);
+                        if (p.requestHeader != null
+                                && p.requestHeader.getType() != OpCode.ping
+                                && p.requestHeader.getType() != OpCode.auth) {
+                            synchronized (pendingQueue) {
+                                pendingQueue.add(p);
+                            }
                         }
                     }
                 }
-            }
-            if (outgoingQueue.isEmpty()) {
-                // No more packets to send: turn off write interest flag.
-                // Will be turned on later by a later call to enableWrite(),
-                // from within ZooKeeperSaslClient (if client is configured
-                // to attempt SASL authentication), or in either doIO() or
-                // in doTransport() if not.
-                disableWrite();
-            } else if (!initialized && p != null && !p.bb.hasRemaining()) {
-                // On initial connection, write the complete connect request
-                // packet, but then disable further writes until after
-                // receiving a successful connection response.  If the
-                // session is expired, then the server sends the expiration
-                // response and immediately closes its end of the socket.  If
-                // the client is simultaneously writing on its end, then the
-                // TCP stack may choose to abort with RST, in which case the
-                // client would never receive the session expired event.  See
-                // http://docs.oracle.com/javase/6/docs/technotes/guides/net/articles/connection_release.html
-                disableWrite();
-            } else {
-                // Just in case
-                enableWrite();
+                if (outgoingQueue.isEmpty()) {
+                    // No more packets to send: turn off write interest flag.
+                    // Will be turned on later by a later call to enableWrite(),
+                    // from within ZooKeeperSaslClient (if client is configured
+                    // to attempt SASL authentication), or in either doIO() or
+                    // in doTransport() if not.
+                    disableWrite();
+                } else if (!initialized && p != null && !p.bb.hasRemaining()) {
+                    // On initial connection, write the complete connect request
+                    // packet, but then disable further writes until after
+                    // receiving a successful connection response.  If the
+                    // session is expired, then the server sends the expiration
+                    // response and immediately closes its end of the socket.  If
+                    // the client is simultaneously writing on its end, then the
+                    // TCP stack may choose to abort with RST, in which case the
+                    // client would never receive the session expired event.  See
+                    // http://docs.oracle.com/javase/6/docs/technotes/guides/net/articles/connection_release.html
+                    disableWrite();
+                } else {
+                    // Just in case
+                    enableWrite();
+                }
             }
         }
     }
 
-    private Packet findSendablePacket(LinkedBlockingDeque<Packet> outgoingQueue,
-                                      boolean tunneledAuthInProgres) {
-        if (outgoingQueue.isEmpty()) {
+    private Packet findSendablePacket(LinkedList<Packet> outgoingQueue,
+                                      boolean clientTunneledAuthenticationInProgress) {
+        synchronized (outgoingQueue) {
+            if (outgoingQueue.isEmpty()) {
+                return null;
+            }
+            if (outgoingQueue.getFirst().bb != null // If we've already starting sending the first packet, we better finish
+                || !clientTunneledAuthenticationInProgress) {
+                return outgoingQueue.getFirst();
+            }
+
+            // Since client's authentication with server is in progress,
+            // send only the null-header packet queued by primeConnection().
+            // This packet must be sent so that the SASL authentication process
+            // can proceed, but all other packets should wait until
+            // SASL authentication completes.
+            ListIterator<Packet> iter = outgoingQueue.listIterator();
+            while (iter.hasNext()) {
+                Packet p = iter.next();
+                if (p.requestHeader == null) {
+                    // We've found the priming-packet. Move it to the beginning of the queue.
+                    iter.remove();
+                    outgoingQueue.add(0, p);
+                    return p;
+                } else {
+                    // Non-priming packet: defer it until later, leaving it in the queue
+                    // until authentication completes.
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("deferring non-priming packet: " + p +
+                                "until SASL authentication completes.");
+                    }
+                }
+            }
+            // no sendable packet found.
             return null;
         }
-        // If we've already starting sending the first packet, we better finish
-        if (outgoingQueue.getFirst().bb != null || !tunneledAuthInProgres) {
-            return outgoingQueue.getFirst();
-        }
-        // Since client's authentication with server is in progress,
-        // send only the null-header packet queued by primeConnection().
-        // This packet must be sent so that the SASL authentication process
-        // can proceed, but all other packets should wait until
-        // SASL authentication completes.
-        Iterator<Packet> iter = outgoingQueue.iterator();
-        while (iter.hasNext()) {
-            Packet p = iter.next();
-            if (p.requestHeader == null) {
-                // We've found the priming-packet. Move it to the beginning of the queue.
-                iter.remove();
-                outgoingQueue.addFirst(p);
-                return p;
-            } else {
-                // Non-priming packet: defer it until later, leaving it in the queue
-                // until authentication completes.
-                LOG.debug("deferring non-priming packet {} until SASL authentation completes.", p);
-            }
-        }
-        return null;
     }
 
     @Override
@@ -324,21 +333,13 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     }
 
     @Override
-    void packetAdded() {
-        wakeupCnxn();
-    }
-
-    @Override
-    void onClosing() {
-        wakeupCnxn();
-    }
-
-    private synchronized void wakeupCnxn() {
+    synchronized void wakeupCnxn() {
         selector.wakeup();
     }
     
     @Override
-    void doTransport(int waitTimeOut, List<Packet> pendingQueue, ClientCnxn cnxn)
+    void doTransport(int waitTimeOut, List<Packet> pendingQueue, LinkedList<Packet> outgoingQueue,
+                     ClientCnxn cnxn)
             throws IOException, InterruptedException {
         selector.select(waitTimeOut);
         Set<SelectionKey> selected;
@@ -358,13 +359,15 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     sendThread.primeConnection();
                 }
             } else if ((k.readyOps() & (SelectionKey.OP_READ | SelectionKey.OP_WRITE)) != 0) {
-                doIO(pendingQueue, cnxn);
+                doIO(pendingQueue, outgoingQueue, cnxn);
             }
         }
         if (sendThread.getZkState().isConnected()) {
-            if (findSendablePacket(outgoingQueue,
-                    sendThread.tunnelAuthInProgress()) != null) {
-                enableWrite();
+            synchronized(outgoingQueue) {
+                if (findSendablePacket(outgoingQueue,
+                        cnxn.sendThread.clientTunneledAuthenticationInProgress()) != null) {
+                    enableWrite();
+                }
             }
         }
         selected.clear();
@@ -383,10 +386,6 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     }
 
     @Override
-    void saslCompleted() {
-        enableWrite();
-    }
-
     synchronized void enableWrite() {
         int i = sockKey.interestOps();
         if ((i & SelectionKey.OP_WRITE) == 0) {
@@ -394,7 +393,8 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         }
     }
 
-    private synchronized void disableWrite() {
+    @Override
+    public synchronized void disableWrite() {
         int i = sockKey.interestOps();
         if ((i & SelectionKey.OP_WRITE) != 0) {
             sockKey.interestOps(i & (~SelectionKey.OP_WRITE));
@@ -409,7 +409,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     }
 
     @Override
-    void connectionPrimed() {
+    synchronized void enableReadWriteOnly() {
         sockKey.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
     }
 
@@ -427,4 +427,6 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         ByteBuffer pbb = p.bb;
         sock.write(pbb);
     }
+
+
 }

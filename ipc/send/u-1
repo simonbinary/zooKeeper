@@ -1,5 +1,0 @@
-sendNode=0
-sendRole=1
-strSendRole=FOLLOWING
-leader=1
-electionTable=1:1,2:1,

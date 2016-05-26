@@ -24,7 +24,6 @@ import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.AsyncCallback.VoidCallback;
 import org.apache.zookeeper.ZooDefs.Ids;
-import org.apache.zookeeper.common.Time;
 
 public class TestHammer implements VoidCallback {
 
@@ -33,7 +32,7 @@ public class TestHammer implements VoidCallback {
      */
     static int REPS = 50000;
     public static void main(String[] args) {
-            long startTime = Time.currentElapsedTime();
+            long startTime = System.currentTimeMillis();
             ZooKeeper zk = null;
             try {
                 zk = new ZooKeeper(args[0], 10000, null);
@@ -52,7 +51,7 @@ public class TestHammer implements VoidCallback {
                     e.printStackTrace();
                 }
             }
-            System.out.println("creates/sec=" + (REPS*1000/(Time.currentElapsedTime()-startTime)));
+            System.out.println("creates/sec=" + (REPS*1000/(System.currentTimeMillis()-startTime)));
     }
 
     public void processResult(int rc, String path, Object ctx) {

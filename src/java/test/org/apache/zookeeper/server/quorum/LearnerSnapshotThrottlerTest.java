@@ -29,13 +29,8 @@ import java.util.concurrent.Future;
 import org.apache.zookeeper.ZKTestCase;
 import org.junit.Assert;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class LearnerSnapshotThrottlerTest extends ZKTestCase {
-    private static final Logger LOG =
-            LoggerFactory.getLogger(LearnerSnapshotThrottlerTest.class);
-
     @Test(expected = SnapshotThrottleException.class)
     public void testTooManySnapshotsNonessential() throws Exception {
         LearnerSnapshotThrottler throttler = new LearnerSnapshotThrottler(5);
@@ -182,9 +177,10 @@ public class LearnerSnapshotThrottlerTest extends ZKTestCase {
     public void testHighContentionWithTimeout() throws Exception {
         int numThreads = 20;
 
-        final LearnerSnapshotThrottler throttler = new LearnerSnapshotThrottler(2, 5000);
+        final LearnerSnapshotThrottler throttler = new LearnerSnapshotThrottler(2, 200);
         ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
         final CountDownLatch threadStartLatch = new CountDownLatch(numThreads);
+        final CountDownLatch snapshotProgressLatch = new CountDownLatch(numThreads);
 
         List<Future<Boolean>> results = new ArrayList<Future<Boolean>>(numThreads);
         for (int i = 0; i < numThreads; i++) {
@@ -205,7 +201,6 @@ public class LearnerSnapshotThrottlerTest extends ZKTestCase {
                         return snapshotNumber <= 2;
                     }
                     catch (Exception e) {
-                        LOG.error("Exception trying to begin snapshot", e);
                         return false;
                     }
                 }

@@ -22,7 +22,6 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.server.SessionTracker;
-import org.apache.zookeeper.server.ZooKeeperServerListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,11 +37,11 @@ public abstract class UpgradeableSessionTracker implements SessionTracker {
     public void start() {}
 
     public void createLocalSessionTracker(SessionExpirer expirer,
-            int tickTime, long id, ZooKeeperServerListener listener) {
+            int tickTime, long id) {
         this.localSessionsWithTimeouts =
             new ConcurrentHashMap<Long, Integer>();
         this.localSessionTracker = new LocalSessionTracker(
-            expirer, this.localSessionsWithTimeouts, tickTime, id, listener);
+            expirer, this.localSessionsWithTimeouts, tickTime, id);
     }
 
     public boolean isTrackingSession(long sessionId) {

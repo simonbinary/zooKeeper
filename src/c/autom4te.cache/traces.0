@@ -3390,28 +3390,13 @@ m4trace:configure.ac:123: -1- _m4_warn([obsolete], [The macro `AC_TRY_RUN' is ob
 You should run autoupdate.], [../../lib/autoconf/general.m4:2764: AC_TRY_RUN is expanded from...
 configure.ac:123: the top level])
 m4trace:configure.ac:142: -1- m4_pattern_allow([^USEIPV6$])
-m4trace:configure.ac:148: -1- m4_pattern_allow([^HAVE_LIBRT$])
-m4trace:configure.ac:150: -1- m4_pattern_allow([^CLOCK_GETTIME_LIBS$])
-m4trace:configure.ac:158: -1- AM_CONDITIONAL([SOLARIS], [
-  case "$host_os" in
-  *solaris*)
-    true
-    ;;
-  *)
-    false
-    ;;
-  esac ])
-m4trace:configure.ac:158: -1- m4_pattern_allow([^SOLARIS_TRUE$])
-m4trace:configure.ac:158: -1- m4_pattern_allow([^SOLARIS_FALSE$])
-m4trace:configure.ac:158: -1- _AM_SUBST_NOTMAKE([SOLARIS_TRUE])
-m4trace:configure.ac:158: -1- _AM_SUBST_NOTMAKE([SOLARIS_FALSE])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^LIB@&t@OBJS$])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^LTLIBOBJS$])
-m4trace:configure.ac:167: -1- AM_CONDITIONAL([am__EXEEXT], [test -n "$EXEEXT"])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^am__EXEEXT_TRUE$])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^am__EXEEXT_FALSE$])
-m4trace:configure.ac:167: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_TRUE])
-m4trace:configure.ac:167: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_FALSE])
-m4trace:configure.ac:167: -1- _AC_AM_CONFIG_HEADER_HOOK(["$ac_file"])
-m4trace:configure.ac:167: -1- _AM_OUTPUT_DEPENDENCY_COMMANDS
-m4trace:configure.ac:167: -1- _LT_PROG_LTMAIN
+m4trace:configure.ac:149: -1- m4_pattern_allow([^LIB@&t@OBJS$])
+m4trace:configure.ac:149: -1- m4_pattern_allow([^LTLIBOBJS$])
+m4trace:configure.ac:149: -1- AM_CONDITIONAL([am__EXEEXT], [test -n "$EXEEXT"])
+m4trace:configure.ac:149: -1- m4_pattern_allow([^am__EXEEXT_TRUE$])
+m4trace:configure.ac:149: -1- m4_pattern_allow([^am__EXEEXT_FALSE$])
+m4trace:configure.ac:149: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_TRUE])
+m4trace:configure.ac:149: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_FALSE])
+m4trace:configure.ac:149: -1- _AC_AM_CONFIG_HEADER_HOOK(["$ac_file"])
+m4trace:configure.ac:149: -1- _AM_OUTPUT_DEPENDENCY_COMMANDS
+m4trace:configure.ac:149: -1- _LT_PROG_LTMAIN

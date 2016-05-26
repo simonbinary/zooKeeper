@@ -75,7 +75,7 @@ public class ReconfigLegacyTest extends QuorumPeerTestBase {
         for (int i = 0; i < SERVER_COUNT; i++) {
             mt[i] = new MainThread(i, clientPorts[i], currentQuorumCfgSection, false);
             // check that a dynamic configuration file doesn't exist
-            Assert.assertEquals( mt[i].getDynamicFiles().length, 0 );
+            Assert.assertFalse(mt[i].dynamicConfigFile.exists());
             mt[i].start();
         }
         // Check that the servers are up, have the right config and can process operations.
@@ -86,9 +86,7 @@ public class ReconfigLegacyTest extends QuorumPeerTestBase {
                             CONNECTION_TIMEOUT));
             zk[i] = new ZooKeeper("127.0.0.1:" + clientPorts[i],
                     ClientBase.CONNECTION_TIMEOUT, this);
-            File[] dynamicFiles = mt[i].getDynamicFiles();
-
-            Assert.assertTrue( dynamicFiles.length== 1 );
+            Assert.assertTrue(mt[i].dynamicConfigFile.exists());
             ReconfigTest.testServerHasConfig(zk[i], allServers, null);
             // check that static config file doesn't include membership info
             // and has a pointer to the dynamic configuration file
@@ -100,7 +98,7 @@ public class ReconfigLegacyTest extends QuorumPeerTestBase {
             Assert.assertFalse(cfg.containsKey("clientPort"));
 
             // check that the dynamic configuration file contains the membership info
-            cfg = readPropertiesFromFile(dynamicFiles[0]);
+            cfg = readPropertiesFromFile(mt[i].dynamicConfigFile);
             for (int j = 0; j < SERVER_COUNT; j++) {
                 String serverLine = cfg.getProperty("server." + j, "");
                 Assert.assertEquals(allServers.get(j), "server." + j + "="
@@ -178,6 +176,8 @@ public class ReconfigLegacyTest extends QuorumPeerTestBase {
         // Start the servers with a static config file, without a dynamic config file.
         for (int i = 0; i < SERVER_COUNT; i++) {
             mt[i] = new MainThread(i, clientPorts[i], quorumCfgSection, false);
+            // check that a dynamic configuration file doesn't exist
+            Assert.assertFalse(mt[i].dynamicConfigFile.exists());
             mt[i].start();
         }
 
@@ -224,7 +224,8 @@ public class ReconfigLegacyTest extends QuorumPeerTestBase {
         }
     }
 
-    public static Properties readPropertiesFromFile(File file) throws IOException {
+
+    private Properties readPropertiesFromFile(File file) throws IOException {
         Properties cfg = new Properties();
         FileInputStream in = new FileInputStream(file);
         try {

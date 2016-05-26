@@ -1,9 +1,0 @@
-callbackName=LeaderElectionCallback2
-sendNode=1
-recvNode=0
-sendRole=0
-strSendRole=LOOKING
-leader=1
-zxid=17179869184
-electionEpoch=1
-peerEpoch=5

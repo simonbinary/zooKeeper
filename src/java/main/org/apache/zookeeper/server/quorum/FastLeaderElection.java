@@ -19,19 +19,15 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.apache.zookeeper.common.Time;
 import org.apache.zookeeper.jmx.MBeanRegistry;
 import org.apache.zookeeper.server.ZooKeeperThread;
 import org.apache.zookeeper.server.quorum.QuorumCnxManager.Message;
@@ -89,8 +85,6 @@ public class FastLeaderElection implements Election {
      */
 
     QuorumCnxManager manager;
-    
-    String ipcDir = "/Users/wangsnowyin/Documents/zookeeper-3.5.1-alpha/ipc";
 
 
     /**
@@ -299,19 +293,14 @@ public class FastLeaderElection implements Election {
                                         LOG.info("{} Received version: {} my version: {}", self.getId(),
                                                 Long.toHexString(rqv.getVersion()),
                                                 Long.toHexString(self.getQuorumVerifier().getVersion()));
-                                        if (self.getPeerState() == ServerState.LOOKING) {
-                                            LOG.debug("Invoking processReconfig(), state: {}", self.getServerState());
-                                            self.processReconfig(rqv, null, null, false);
-                                            if (!rqv.equals(curQV)) {
-                                                LOG.info("restarting leader election");
-                                                self.shuttingDownLE = true;
-                                                self.getElectionAlg().shutdown();
-
-                                                break;
-                                            }
-                                        } else {
-                                            LOG.debug("Skip processReconfig(), state: {}", self.getServerState());
-                                        }
+                                        self.processReconfig(rqv, null, null, false);
+                                        if (!rqv.equals(curQV)) {
+                                            LOG.info("restarting leader election");
+                                            self.shuttingDownLE = true;
+                                            self.getElectionAlg().shutdown();
+                                            
+                                            break;
+                                       }
                                     }
                                 } catch (IOException e) {
                                     LOG.error("Something went wrong while processing config received from {}", response.sid);
@@ -379,6 +368,12 @@ public class FastLeaderElection implements Election {
                              */
                             if(LOG.isInfoEnabled()){
                                 printNotification(n);
+                            }
+
+                            try{
+                                Thread.sleep(4 * 1000);
+                            }catch(Exception e){
+                                e.printStackTrace();
                             }
 
                             /*
@@ -466,7 +461,7 @@ public class FastLeaderElection implements Election {
                     try {
                         ToSend m = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
                         if(m == null) continue;
-                        //intercept(m);
+
                         process(m);
                     } catch (InterruptedException e) {
                         break;
@@ -474,78 +469,6 @@ public class FastLeaderElection implements Election {
                 }
                 LOG.info("WorkerSender is down");
             }
-            
-            /*added by Xueyin Wang*/
-            Hashtable<Long, Integer> packetCount = new Hashtable<Long, Integer>();
-            
-            /**
-             * added by Xueyin Wang
-             * called by 
-             * @param*/
-            public void intercept(ToSend m) {
-            	//System.err.println("FastLeaderElection.intercept(): intercept msg to samc");
-            	long eventId = getHash(m);
-            	
-            	// create new file
-            	try{
-    	        	PrintWriter writer = new PrintWriter(ipcDir + "/new/le-" + eventId, "UTF-8");
-    	        	writer.println("callbackName=" + "LeaderElectionCallback"+self.getId());
-    		        writer.println("sendNode=" + (self.getId()-1));
-    		        writer.println("recvNode=" + (m.sid-1));
-    		        writer.println("sendRole=" + m.state.getValue());
-    		        writer.println("strSendRole=" + m.state);
-    		        writer.println("leader=" + (m.leader-1));
-    		        writer.println("zxid=" + m.zxid);
-    		        writer.println("electionEpoch=" + m.electionEpoch);
-    		        writer.println("peerEpoch=" + m.peerEpoch);
-    		        writer.close();
-            	} catch (Exception e) {
-                	LOG.error("[DEBUG] error in creating new file : " + eventId);
-            	}
-            	
-            	// move new file to send folder - commit message
-            	try{
-            		Runtime.getRuntime().exec("mv " + ipcDir + "/new/le-" + eventId + " " + 
-            				ipcDir + "/send/le-" + eventId);
-            	} catch (Exception e){
-                	LOG.error("[ERROR] error in moving file to send folder : le-" + eventId);
-            	}
-            	            	
-            	// wait for dmck signal
-            	File ackFile = new File(ipcDir + "/ack/" + Long.toString(eventId));
-            	LOG.info("ack file : " + ackFile.getAbsolutePath());
-            	LOG.info("[DEBUG] start waiting for file : " + eventId);
-            	while(!ackFile.exists()){
-            		// wait
-            	}
-            	
-            	//LOG.info("..........................................");
-            	try{
-                	Runtime.getRuntime().exec("rm " + ipcDir + "/ack/" + eventId);
-            	} catch (Exception e){
-            		e.printStackTrace();
-            	}
-    			
-    		}
-            
-            /*added by Xueyin Wang*/
-            public long getHash(ToSend m) {
-            	final int prime = 3;
-                long result = 1;
-                result = prime * result + m.sid;
-                result = prime * result + self.getId();
-                result = prime * result + m.state.getValue();
-                result = prime * result + m.leader;
-                
-                Integer count = packetCount.get(result);
-                if (count == null) {
-                    count = 0;
-                }
-                ++count;
-                long id = prime * result + count;
-                packetCount.put(result, count);
-                return id;
-    		}
 
             /**
              * Called by run() once there is a new message to send.
@@ -553,7 +476,6 @@ public class FastLeaderElection implements Election {
              * @param m     message to send
              */
             void process(ToSend m) {
-            	//System.err.println("FastLeaderElection.process(): send msg to I/O queue");
                 ByteBuffer requestBuffer = buildMsg(m.state.ordinal(),
                                                     m.leader,
                                                     m.zxid,
@@ -591,7 +513,7 @@ public class FastLeaderElection implements Election {
             this.wrThread.setDaemon(true);
         }
 
-		/**
+        /**
          * Starts instances of WorkerSender and WorkerReceiver
          */
         void start(){
@@ -868,7 +790,7 @@ public class FastLeaderElection implements Election {
         return predicate;
     }
 
-    synchronized void updateProposal(long leader, long zxid, long epoch, HashMap<Long, Vote> recvset, long sender, QuorumPeer.ServerState state){
+    synchronized void updateProposal(long leader, long zxid, long epoch){
         if(LOG.isDebugEnabled()){
             LOG.debug("Updating proposal: " + leader + " (newleader), 0x"
                     + Long.toHexString(zxid) + " (newzxid), " + proposedLeader
@@ -876,36 +798,8 @@ public class FastLeaderElection implements Election {
         }
         proposedLeader = leader;
         proposedZxid = zxid;
-        proposedEpoch = epoch;        
+        proposedEpoch = epoch;
     }
-    
-    /* added by Xueyin Wang */
-    synchronized void updateStatetoDMCK(long leader, HashMap<Long, Vote> recvset, long sender, QuorumPeer.ServerState state){
-		// create new file
-    	try{
-        	PrintWriter writer = new PrintWriter(ipcDir + "/new/u-" + self.getId());
-	        writer.println("sendNode=" + (sender-1));
-	        writer.println("sendRole=" + state.getValue());
-	        writer.println("strSendRole=" + state);
-	        writer.println("leader=" + (leader-1));
-	        writer.print("electionTable=");
-	        for (long node : recvset.keySet()){
-		        writer.print(node + ":" + (recvset.get(node).getId()-1) + ",");
-	        }
-	        writer.close();
-	        System.err.println("[updatetoDMCK] sendNode-" + sender + " sendRole-" + state + " leader-" + leader);
-    	} catch (Exception e) {
-        	LOG.error("[DEBUG] error in creating new file : u-" + self.getId());
-    	}
-    	
-    	// move new file to send folder - commit message
-    	try{
-    		Runtime.getRuntime().exec("mv " + ipcDir + "/new/u-" + self.getId() + " " + 
-    				ipcDir + "/send/u-" + self.getId());
-    	} catch (Exception e){
-        	LOG.error("[DEBUG] error in moving file to send folder : u-" + self.getId());
-    	}
-	}
 
     synchronized public Vote getVote(){
         return new Vote(proposedLeader, proposedZxid, proposedEpoch);
@@ -983,7 +877,7 @@ public class FastLeaderElection implements Election {
             self.jmxLeaderElectionBean = null;
         }
         if (self.start_fle == 0) {
-           self.start_fle = Time.currentElapsedTime();
+           self.start_fle = System.currentTimeMillis();
         }
         try {
             HashMap<Long, Vote> recvset = new HashMap<Long, Vote>();
@@ -994,7 +888,7 @@ public class FastLeaderElection implements Election {
 
             synchronized(this){
                 logicalclock.incrementAndGet();
-                updateProposal(getInitId(), getInitLastLoggedZxid(), getPeerEpoch(), recvset, getInitId(), QuorumPeer.ServerState.LOOKING);
+                updateProposal(getInitId(), getInitLastLoggedZxid(), getPeerEpoch());
             }
 
             LOG.info("New election. My id =  " + self.getId() +
@@ -1039,23 +933,21 @@ public class FastLeaderElection implements Election {
                      * voting view.
                      */
                     switch (n.state) {
-                    case LOOKING:                   	
+                    case LOOKING:
                         // If notification > current, replace and send messages out
                         if (n.electionEpoch > logicalclock.get()) {
-                        	//System.err.println("FastLeaderElection.lookForLeader: electionEpoch > logicalclock");
                             logicalclock.set(n.electionEpoch);
                             recvset.clear();
                             if(totalOrderPredicate(n.leader, n.zxid, n.peerEpoch,
                                     getInitId(), getInitLastLoggedZxid(), getPeerEpoch())) {
-                                updateProposal(n.leader, n.zxid, n.peerEpoch, recvset, n.sid, n.state);
+                                updateProposal(n.leader, n.zxid, n.peerEpoch);
                             } else {
                                 updateProposal(getInitId(),
                                         getInitLastLoggedZxid(),
-                                        getPeerEpoch(), recvset, getInitId(), self.getPeerState());
+                                        getPeerEpoch());
                             }
                             sendNotifications();
                         } else if (n.electionEpoch < logicalclock.get()) {
-                        	//System.err.println("FastLeaderElection.lookForLeader: electionEpoch < logicalclock");
                             if(LOG.isDebugEnabled()){
                                 LOG.debug("Notification election epoch is smaller than logicalclock. n.electionEpoch = 0x"
                                         + Long.toHexString(n.electionEpoch)
@@ -1064,12 +956,9 @@ public class FastLeaderElection implements Election {
                             break;
                         } else if (totalOrderPredicate(n.leader, n.zxid, n.peerEpoch,
                                 proposedLeader, proposedZxid, proposedEpoch)) {
-                        	//System.err.println("FastLeaderElection.lookForLeader: electionEpoch = logicalclock");
-                            updateProposal(n.leader, n.zxid, n.peerEpoch, recvset, n.sid, n.state);
+                            updateProposal(n.leader, n.zxid, n.peerEpoch);
                             sendNotifications();
                         }
-                        
-                        recvset.put(n.sid, new Vote(n.leader, n.zxid, n.electionEpoch, n.peerEpoch));
 
                         if(LOG.isDebugEnabled()){
                             LOG.debug("Adding vote: from=" + n.sid +
@@ -1077,6 +966,8 @@ public class FastLeaderElection implements Election {
                                     ", proposed zxid=0x" + Long.toHexString(n.zxid) +
                                     ", proposed election epoch=0x" + Long.toHexString(n.electionEpoch));
                         }
+
+                        recvset.put(n.sid, new Vote(n.leader, n.zxid, n.electionEpoch, n.peerEpoch));
 
                         if (termPredicate(recvset,
                                 new Vote(proposedLeader, proposedZxid,
@@ -1099,9 +990,6 @@ public class FastLeaderElection implements Election {
                             if (n == null) {
                                 self.setPeerState((proposedLeader == self.getId()) ?
                                         ServerState.LEADING: learningState());
-                                
-                                /*updated by Xueyin Wang*/
-                                updateStatetoDMCK(proposedLeader, recvset, self.getId(), self.getPeerState());
 
                                 Vote endVote = new Vote(proposedLeader,
                                         proposedZxid, proposedEpoch);
@@ -1126,9 +1014,6 @@ public class FastLeaderElection implements Election {
                                             && checkLeader(outofelection, n.leader, n.electionEpoch)) {
                                 self.setPeerState((n.leader == self.getId()) ?
                                         ServerState.LEADING: learningState());
-                                
-                                /*updated by Xueyin Wang*/
-                                updateStatetoDMCK(proposedLeader, recvset, self.getId(), self.getPeerState());
 
                                 Vote endVote = new Vote(n.leader, n.zxid, n.peerEpoch);
                                 leaveInstance(endVote);
@@ -1159,9 +1044,6 @@ public class FastLeaderElection implements Election {
                                 logicalclock.set(n.electionEpoch);
                                 self.setPeerState((n.leader == self.getId()) ?
                                         ServerState.LEADING: learningState());
-                                
-                                /*updated by Xueyin Wang*/
-                                updateStatetoDMCK(proposedLeader, recvset, self.getId(), self.getPeerState());
                             }
                             Vote endVote = new Vote(n.leader, n.zxid, n.peerEpoch);
                             leaveInstance(endVote);

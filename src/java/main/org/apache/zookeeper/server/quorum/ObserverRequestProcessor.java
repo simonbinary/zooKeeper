@@ -58,8 +58,7 @@ public class ObserverRequestProcessor extends ZooKeeperCriticalThread implements
      */
     public ObserverRequestProcessor(ObserverZooKeeperServer zks,
             RequestProcessor nextProcessor) {
-        super("ObserverRequestProcessor:" + zks.getServerId(), zks
-                .getZooKeeperServerListener());
+        super("ObserverRequestProcessor:" + zks.getServerId());
         this.zks = zks;
         this.nextProcessor = nextProcessor;
     }
@@ -93,9 +92,7 @@ public class ObserverRequestProcessor extends ZooKeeperCriticalThread implements
                     break;
                 case OpCode.create:
                 case OpCode.create2:
-                case OpCode.createContainer:
                 case OpCode.delete:
-                case OpCode.deleteContainer:
                 case OpCode.setData:
                 case OpCode.reconfig:
                 case OpCode.setACL:
@@ -113,7 +110,7 @@ public class ObserverRequestProcessor extends ZooKeeperCriticalThread implements
                 }
             }
         } catch (Exception e) {
-            handleException(this.getName(), e);
+            LOG.error("Unexpected exception causing exit", e);
         }
         LOG.info("ObserverRequestProcessor exited loop!");
     }

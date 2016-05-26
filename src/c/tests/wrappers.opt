@@ -4,4 +4,3 @@
 -Wl,--wrap -Wl,get_xid
 -Wl,--wrap -Wl,deliverWatchers
 -Wl,--wrap -Wl,activateWatcher
--Wl,--wrap -Wl,realloc

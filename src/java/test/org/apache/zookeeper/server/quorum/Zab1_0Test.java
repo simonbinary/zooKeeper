@@ -63,26 +63,19 @@ import org.apache.zookeeper.txn.CreateTxn;
 import org.apache.zookeeper.txn.ErrorTxn;
 import org.apache.zookeeper.txn.SetDataTxn;
 import org.apache.zookeeper.txn.TxnHeader;
-import org.apache.zookeeper.ZKTestCase;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 import org.apache.zookeeper.server.quorum.flexible.QuorumVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Zab1_0Test extends ZKTestCase {
+public class Zab1_0Test {
     private static final int SYNC_LIMIT = 2;
 
     private static final Logger LOG = LoggerFactory.getLogger(Zab1_0Test.class);
 
     private static final File testData = new File(
             System.getProperty("test.data.dir", "build/test/data"));
-
-    @Before
-    public void setUp() {
-        System.setProperty("zookeeper.admin.enableServer", "false");
-    }
 
     private static final class LeadThread extends Thread {
         private final Leader leader;
@@ -282,8 +275,8 @@ public class Zab1_0Test extends ZKTestCase {
     }
 
     private static final class NullServerCnxnFactory extends ServerCnxnFactory {
-        public void startup(ZooKeeperServer zkServer, boolean startServer)
-                throws IOException, InterruptedException {
+        public void startup(ZooKeeperServer zkServer) throws IOException,
+                InterruptedException {
         }
         public void start() {
         }
@@ -305,12 +298,10 @@ public class Zab1_0Test extends ZKTestCase {
         public Iterable<ServerCnxn> getConnections() {
             return null;
         }
-        public void configure(InetSocketAddress addr, int maxcc, boolean secure)
+        public void configure(InetSocketAddress addr, int maxClientCnxns)
                 throws IOException {
         }
-
-        public boolean closeSession(long sessionId) {
-            return false;
+        public void closeSession(long sessionId) {
         }
         public void closeAll() {
         }

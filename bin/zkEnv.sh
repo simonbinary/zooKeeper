@@ -67,7 +67,7 @@ fi
 
 if [ "x${ZOO_LOG_DIR}" = "x" ]
 then
-    ZOO_LOG_DIR="$ZOOKEEPER_PREFIX/logs"
+    ZOO_LOG_DIR="."
 fi
 
 if [ "x${ZOO_LOG4J_PROP}" = "x" ]
@@ -75,13 +75,10 @@ then
     ZOO_LOG4J_PROP="INFO,CONSOLE"
 fi
 
-if [[ -n "$JAVA_HOME" ]] && [[ -x "$JAVA_HOME/bin/java" ]];  then
-    JAVA="$JAVA_HOME/bin/java"
-elif type -p java; then
-    JAVA=java
+if [ "$JAVA_HOME" != "" ]; then
+  JAVA="$JAVA_HOME/bin/java"
 else
-    echo "Error: JAVA_HOME is not set and java could not be found in PATH." 1>&2
-    exit 1
+  JAVA=java
 fi
 
 #add the zoocfg dir to classpath

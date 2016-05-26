@@ -31,7 +31,6 @@ import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.server.jersey.jaxb.ZChildren;
 import org.apache.zookeeper.server.jersey.jaxb.ZChildrenJSON;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -100,6 +99,8 @@ public class GetChildrenTest extends Base {
 
     @Test
     public void testGetChildren() throws Exception {
+        LOG.info("STARTING " + getName());
+
         if (expectedChildren != null) {
             for(String child : expectedChildren) {
                 zk.create(expectedPath + "/" + child, null,
@@ -109,7 +110,7 @@ public class GetChildrenTest extends Base {
 
         ClientResponse cr = znodesr.path(path).queryParam("view", "children")
             .accept(accept).get(ClientResponse.class);
-        Assert.assertEquals(expectedStatus, cr.getClientResponseStatus());
+        assertEquals(expectedStatus, cr.getClientResponseStatus());
 
         if (expectedChildren == null) {
             return;
@@ -119,20 +120,20 @@ public class GetChildrenTest extends Base {
             ZChildrenJSON zchildren = cr.getEntity(ZChildrenJSON.class);
             Collections.sort(expectedChildren);
             Collections.sort(zchildren.children);
-            Assert.assertEquals(expectedChildren, zchildren.children);
-            Assert.assertEquals(znodesr.path(path).toString(), zchildren.uri);
-            Assert.assertEquals(znodesr.path(path).toString() + "/{child}",
+            assertEquals(expectedChildren, zchildren.children);
+            assertEquals(znodesr.path(path).toString(), zchildren.uri);
+            assertEquals(znodesr.path(path).toString() + "/{child}",
                     zchildren.child_uri_template);
         } else if (accept.equals(MediaType.APPLICATION_XML)) {
             ZChildren zchildren = cr.getEntity(ZChildren.class);
             Collections.sort(expectedChildren);
             Collections.sort(zchildren.children);
-            Assert.assertEquals(expectedChildren, zchildren.children);
-            Assert.assertEquals(znodesr.path(path).toString(), zchildren.uri);
-            Assert.assertEquals(znodesr.path(path).toString() + "/{child}",
+            assertEquals(expectedChildren, zchildren.children);
+            assertEquals(znodesr.path(path).toString(), zchildren.uri);
+            assertEquals(znodesr.path(path).toString() + "/{child}",
                     zchildren.child_uri_template);
         } else {
-            Assert.fail("unknown accept type");
+            fail("unknown accept type");
         }
     }
 }
