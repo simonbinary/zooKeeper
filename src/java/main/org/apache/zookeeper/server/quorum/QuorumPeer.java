@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.Writer;
@@ -273,7 +274,15 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
 
     public enum ServerState {
-        LOOKING, FOLLOWING, LEADING, OBSERVING;
+    	LOOKING(0), FOLLOWING(1), LEADING(2), OBSERVING(3);
+    	private int value;
+    	ServerState(int value){
+    		this.value = value;
+    	}
+    	
+    	int getValue(){
+    		return this.value;
+    	}
     }
 
     /*
@@ -1052,8 +1061,37 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
            setPeerState(ServerState.LOOKING);
            LOG.debug("Shouldn't be here");
        }       
-       reconfigFlag = false;   
+       reconfigFlag = false;  
+       
+       /*added by Xueyin Wang*/
+       updateStatetoDMCK(getCurrentVote().getId(), getId(), getPeerState());
     }
+    
+    /* added by Xueyin Wang */
+    String ipcDir = FastLeaderElection.ipcDir;
+    synchronized void updateStatetoDMCK(long leader, long sender, QuorumPeer.ServerState state){
+		// create new file
+    	try{
+        	PrintWriter writer = new PrintWriter(ipcDir + "/new/u-" + sender);
+	        writer.println("sendNode=" + (sender-1));
+	        writer.println("sendRole=" + state.getValue());
+	        writer.println("strSendRole=" + state);
+	        writer.println("leader=" + (leader-1));
+	        writer.print("electionTable=");
+	        writer.close();
+	        System.err.println("[updatetoDMCK] sendNode-" + sender + " sendRole-" + state + " leader-" + leader);
+    	} catch (Exception e) {
+        	LOG.error("[DEBUG] error in creating new file : u-" + sender);
+    	}
+    	
+    	// move new file to send folder - commit message
+    	try{
+    		Runtime.getRuntime().exec("mv " + ipcDir + "/new/u-" + sender + " " + 
+    				ipcDir + "/send/u-" + sender);
+    	} catch (Exception e){
+        	LOG.error("[DEBUG] error in moving file to send folder : u-" + sender);
+    	}
+	}
     
     public void shutdown() {
         running = false;

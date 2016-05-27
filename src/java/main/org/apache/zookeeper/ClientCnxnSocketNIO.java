@@ -18,7 +18,9 @@
 
 package org.apache.zookeeper;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
@@ -34,6 +36,7 @@ import java.util.Set;
 import org.apache.zookeeper.ClientCnxn.EndOfStreamException;
 import org.apache.zookeeper.ClientCnxn.Packet;
 import org.apache.zookeeper.ZooDefs.OpCode;
+import org.apache.zookeeper.server.quorum.FastLeaderElection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +51,8 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     private SocketAddress localSocketAddress;
 
     private SocketAddress remoteSocketAddress;
+    
+    String ipcDir = FastLeaderElection.ipcDir;
 
     ClientCnxnSocketNIO() throws IOException {
         super();
@@ -56,6 +61,44 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     @Override
     boolean isConnected() {
         return sockKey != null;
+    }
+    
+    public void intercept(Packet p){
+    	long from = 2, to = 0;
+    	long eventId = FastLeaderElection.getHash(from, to);
+    	
+    	// create new file
+    	try{
+        	PrintWriter writer = new PrintWriter(ipcDir + "/new/rc-" + eventId, "UTF-8");
+        	//writer.println("callbackName=" + "LeaderElectionCallback"+self.getId());
+	        //writer.println("sendNode=" + (self.getId()-1));
+	        //writer.println("recvNode=" + (leaderId-1));
+	        writer.close();
+    	} catch (Exception e) {
+        	LOG.error("[DEBUG] error in creating new file : " + eventId);
+    	}
+    	
+    	// move new file to send folder - commit message
+    	try{
+    		Runtime.getRuntime().exec("mv " + ipcDir + "/new/rc-" + eventId + " " + 
+    				ipcDir + "/send/rc-" + eventId);
+    	} catch (Exception e){
+        	LOG.error("[ERROR] error in moving file to send folder : rc-" + eventId);
+    	}
+    	            	
+    	// wait for dmck signal
+    	File ackFile = new File(ipcDir + "/ack/" + Long.toString(eventId));
+    	LOG.info("ack file : " + ackFile.getAbsolutePath());
+    	LOG.info("[DEBUG] start waiting for file : " + eventId);
+    	while(!ackFile.exists()){
+    		// wait
+    	}
+    	
+    	try{
+        	Runtime.getRuntime().exec("rm " + ipcDir + "/ack/" + eventId);
+    	} catch (Exception e){
+    		e.printStackTrace();
+    	}
     }
     
     /**
@@ -119,6 +162,12 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                         }
                         p.createBB();
                     }
+                    
+                    /*added by Xueyin Wang*/
+                    if(p.requestHeader.getType() == OpCode.reconfig){
+                    	intercept(p);
+                    }
+                    
                     sock.write(p.bb);
                     if (!p.bb.hasRemaining()) {
                         sentCount++;

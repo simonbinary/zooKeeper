@@ -23,7 +23,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -72,6 +74,8 @@ public class Learner {
     protected BufferedOutputStream bufferedOutput;
     
     protected Socket sock;
+    
+    String ipcDir = FastLeaderElection.ipcDir;
     
     /**
      * Socket getter
@@ -249,7 +253,50 @@ public class Learner {
                 sock.getInputStream()));
         bufferedOutput = new BufferedOutputStream(sock.getOutputStream());
         leaderOs = BinaryOutputArchive.getArchive(bufferedOutput);
-    }   
+    } 
+    
+    /*added by Xueyin Wang*/
+    public void intercept(QuorumPacket qp){
+    	long leaderId = self.getCurrentVote().getId();
+    	long eventId = FastLeaderElection.getHash(self.getId(), leaderId);
+    	
+    	// create new file
+    	try{
+        	PrintWriter writer = new PrintWriter(ipcDir + "/new/sync-" + eventId, "UTF-8");
+        	writer.println("callbackName=" + "LeaderElectionCallback"+self.getId());
+	        writer.println("sendNode=" + (self.getId()-1));
+	        writer.println("recvNode=" + (leaderId-1));
+	        writer.println("leader=" + (leaderId-1));
+	        writer.println("sendRole=" + self.getPeerState().getValue());
+	        writer.println("strSendRole=" + self.getServerState());
+	        writer.println("zxid=" + qp.getZxid());
+	        writer.close();
+    	} catch (Exception e) {
+        	LOG.error("[DEBUG] error in creating new file : " + eventId);
+    	}
+    	
+    	// move new file to send folder - commit message
+    	try{
+    		Runtime.getRuntime().exec("mv " + ipcDir + "/new/sync-" + eventId + " " + 
+    				ipcDir + "/send/sync-" + eventId);
+    	} catch (Exception e){
+        	LOG.error("[ERROR] error in moving file to send folder : sync-" + eventId);
+    	}
+    	            	
+    	// wait for dmck signal
+    	File ackFile = new File(ipcDir + "/ack/" + Long.toString(eventId));
+    	LOG.info("ack file : " + ackFile.getAbsolutePath());
+    	LOG.info("[DEBUG] start waiting for file : " + eventId);
+    	while(!ackFile.exists()){
+    		// wait
+    	}
+    	
+    	try{
+        	Runtime.getRuntime().exec("rm " + ipcDir + "/ack/" + eventId);
+    	} catch (Exception e){
+    		e.printStackTrace();
+    	}
+    }
     
     /**
      * Once connected to the leader, perform the handshake protocol to
@@ -276,14 +323,11 @@ public class Learner {
         boa.writeRecord(li, "LearnerInfo");
         qp.setData(bsid.toByteArray());
         
+        /*added by Xueyin Wang*/
+        intercept(qp);
+        
         writePacket(qp, true);
         readPacket(qp);  
-
-        try{
-            Thread.sleep(5 * 1000);
-        }catch(Exception e){
-            e.printStackTrace();
-        }
               
         final long newEpoch = ZxidUtils.getEpochFromZxid(qp.getZxid());
 		if (qp.getType() == Leader.LEADERINFO) {
@@ -304,6 +348,10 @@ public class Learner {
         		throw new IOException("Leaders epoch, " + newEpoch + " is less than accepted epoch, " + self.getAcceptedEpoch());
         	}
         	QuorumPacket ackNewEpoch = new QuorumPacket(Leader.ACKEPOCH, lastLoggedZxid, epochBytes, null);
+        	
+        	/*added by Xueyin Wang*/
+        	intercept(ackNewEpoch);
+        	
         	writePacket(ackNewEpoch, true);
             return ZxidUtils.makeZxid(newEpoch, 0);
         } else {
@@ -493,12 +541,20 @@ public class Learner {
                     zk.takeSnapshot();
                     self.setCurrentEpoch(newEpoch);
                     snapshotTaken = true;
-                    writePacket(new QuorumPacket(Leader.ACK, newLeaderZxid, null, null), true);
+                    
+                    /*updated by Xueyin Wang*/
+                    QuorumPacket ackPacket = new QuorumPacket(Leader.ACK, newLeaderZxid, null, null);
+                    intercept(ackPacket);
+                    writePacket(ackPacket, true);
                     break;
                 }
             }
         }
         ack.setZxid(ZxidUtils.makeZxid(newEpoch, 0));
+        
+        /*added by Xueyin Wang*/
+        intercept(ack);
+        
         writePacket(ack, true);
         sock.setSoTimeout(self.tickTime * self.syncLimit);
         zk.startup();

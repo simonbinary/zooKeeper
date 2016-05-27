@@ -592,12 +592,13 @@ public class Leader {
                     }
                     tickSkip = !tickSkip;
                 }
-
+                
+                /*
                 try{
                     Thread.sleep(5 * 1000);
                 }catch(Exception e){
                     e.printStackTrace();
-                }
+                }*/
 
                 for (LearnerHandler f : getLearners()) {
                     f.ping();

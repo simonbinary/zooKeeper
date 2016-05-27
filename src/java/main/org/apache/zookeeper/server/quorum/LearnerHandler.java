@@ -24,7 +24,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -60,6 +62,8 @@ public class LearnerHandler extends ZooKeeperThread {
     private static final Logger LOG = LoggerFactory.getLogger(LearnerHandler.class);
 
     protected final Socket sock;
+    
+    String ipcDir = FastLeaderElection.ipcDir;
 
     public Socket getSocket() {
         return sock;
@@ -218,6 +222,7 @@ public class LearnerHandler extends ZooKeeperThread {
             try {
                 QuorumPacket p;
                 p = queuedPackets.poll();
+                
                 if (p == null) {
                     bufferedOutput.flush();
                     p = queuedPackets.take();
@@ -227,6 +232,12 @@ public class LearnerHandler extends ZooKeeperThread {
                     // Packet of death!
                     break;
                 }
+                
+                /*added by Xueyin Wang*/
+                if(p.getType() == Leader.UPTODATE || p.getType() == Leader.DIFF || p.getType() == Leader.TRUNC || p.getType() == Leader.NEWLEADER){
+                	intercept(p);
+                }
+                
                 if (p.getType() == Leader.PING) {
                     traceMask = ZooTrace.SERVER_PING_TRACE_MASK;
                 }
@@ -314,6 +325,49 @@ public class LearnerHandler extends ZooKeeperThread {
         }
         return entry;
     }
+    
+    /*added by Xueyin Wang*/
+    public void intercept(QuorumPacket qp){
+    	long leaderId = this.leader.self.getId();
+    	long eventId = FastLeaderElection.getHash(leaderId, this.getSid());
+    	
+    	// create new file
+    	try{
+        	PrintWriter writer = new PrintWriter(ipcDir + "/new/sync-" + eventId, "UTF-8");
+        	writer.println("callbackName=" + "LeaderElectionCallback"+leaderId);
+	        writer.println("sendNode=" + (leaderId-1));
+	        writer.println("recvNode=" + (this.getSid()-1));
+	        writer.println("leader=" + (leaderId-1));
+	        writer.println("sendRole=" + this.leader.self.getPeerState().getValue());
+	        writer.println("strSendRole=" + this.leader.self.getServerState());
+	        writer.println("zxid=" + qp.getZxid());
+	        writer.close();
+    	} catch (Exception e) {
+        	LOG.error("[DEBUG] error in creating new file : " + eventId);
+    	}
+    	
+    	// move new file to send folder - commit message
+    	try{
+    		Runtime.getRuntime().exec("mv " + ipcDir + "/new/sync-" + eventId + " " + 
+    				ipcDir + "/send/sync-" + eventId);
+    	} catch (Exception e){
+        	LOG.error("[ERROR] error in moving file to send folder : sync-" + eventId);
+    	}
+    	            	
+    	// wait for dmck signal
+    	File ackFile = new File(ipcDir + "/ack/" + Long.toString(eventId));
+    	LOG.info("ack file : " + ackFile.getAbsolutePath());
+    	LOG.info("[DEBUG] start waiting for file : " + eventId);
+    	while(!ackFile.exists()){
+    		// wait
+    	}
+    	
+    	try{
+        	Runtime.getRuntime().exec("rm " + ipcDir + "/ack/" + eventId);
+    	} catch (Exception e){
+    		e.printStackTrace();
+    	}
+    }
 
     /**
      * This thread will receive packets from the peer and process them and
@@ -386,15 +440,12 @@ public class LearnerHandler extends ZooKeeperThread {
                 byte ver[] = new byte[4];
                 ByteBuffer.wrap(ver).putInt(0x10000);
                 QuorumPacket newEpochPacket = new QuorumPacket(Leader.LEADERINFO, newLeaderZxid, ver, null);
+                
+                /*added by Xueyin Wang*/
+                intercept(newEpochPacket);
+                
                 oa.writeRecord(newEpochPacket, "packet");
                 bufferedOutput.flush();
-
-                try{
-                    Thread.sleep(5 * 1000);
-                }catch(Exception e){
-                    e.printStackTrace();
-                }
-
 
                 QuorumPacket ackEpochPacket = new QuorumPacket();
                 ia.readRecord(ackEpochPacket, "packet");
@@ -436,7 +487,12 @@ public class LearnerHandler extends ZooKeeperThread {
                         leader.getLearnerSnapshotThrottler().beginSnapshot(exemptFromThrottle);
                 try {
                     long zxidToSend = leader.zk.getZKDatabase().getDataTreeLastProcessedZxid();
-                    oa.writeRecord(new QuorumPacket(Leader.SNAP, zxidToSend, null, null), "packet");
+                    QuorumPacket snapPacket = new QuorumPacket(Leader.SNAP, zxidToSend, null, null);
+                    
+                    /*added by Xueyin Wang*/
+                    intercept(snapPacket);
+                    
+                    oa.writeRecord(snapPacket, "packet");
                     bufferedOutput.flush();
 
                     LOG.info("Sending snapshot last zxid of peer is 0x{}, zxid of leader is 0x{}, "
@@ -685,12 +741,6 @@ public class LearnerHandler extends ZooKeeperThread {
                  */
                 minCommittedLog = lastProcessedZxid;
                 maxCommittedLog = lastProcessedZxid;
-            }
-
-            try{
-                Thread.sleep(5 * 1000);
-            }catch(Exception e){
-                e.printStackTrace();
             }
 
             /*
